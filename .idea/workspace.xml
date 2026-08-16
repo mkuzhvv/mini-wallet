@@ -4,14 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/docs/api.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/domain.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/events.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/rules.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/statuses.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -26,12 +19,12 @@
     &quot;assignee&quot;: &quot;mkuzhvv&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "git@github.com:mkuzhvv/mini-wallet.git",
-    "accountId": "f51eabe6-dc66-4957-93bb-e371e38461c6"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:mkuzhvv/mini-wallet.git&quot;,
+    &quot;accountId&quot;: &quot;f51eabe6-dc66-4957-93bb-e371e38461c6&quot;
   }
-}]]></component>
+}</component>
   <component name="MavenImportPreferences">
     <option name="generalSettings">
       <MavenGeneralSettings>
@@ -86,6 +79,13 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
+    <configuration name="StatementServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="statement_service" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.mini_wallet.statement_service.StatementServiceApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
@@ -104,6 +104,7 @@
       <workItem from="1786662914267" duration="1198000" />
       <workItem from="1786753025462" duration="1284000" />
       <workItem from="1786812726330" duration="6000" />
+      <workItem from="1786918526570" duration="202000" />
     </task>
     <servers />
   </component>

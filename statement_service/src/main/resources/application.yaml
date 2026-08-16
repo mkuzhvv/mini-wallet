@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: statement_service
+
+
+server:
+  port: 8083

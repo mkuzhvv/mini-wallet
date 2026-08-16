@@ -6,6 +6,7 @@
       <list>
         <option value="$PROJECT_DIR$/ledger-service/pom.xml" />
         <option value="$PROJECT_DIR$/payment-service/pom.xml" />
+        <option value="$PROJECT_DIR$/statement_service/pom.xml" />
       </list>
     </option>
   </component>
