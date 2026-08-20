@@ -3,6 +3,7 @@
 ## Общие соглашения
 
 - Публичные ручки: `/api/v1/...`. Внутренние (сервис-сервис): `/internal/v1/...`
+- Публичные endpoint'ы ограничены rate limiter'ом (правило X-01).
 - Порты локально: ledger 8081, payment 8082, statement 8083
 - Все id — UUID
 - Время — ISO-8601 UTC, например `2026-08-14T10:30:00Z`
@@ -160,12 +161,13 @@ Response 200:
 
 ## Таблица кодов ошибок
 
-| code                    | HTTP | где                     | смысл                          |
-|-------------------------|------|-------------------------|--------------------------------|
-| VALIDATION_ERROR        | 400  | все                     | невалидный запрос              |
-| WALLET_NOT_FOUND        | 404  | ledger, payment         | кошелек не найден              |
-| PAYMENT_NOT_FOUND       | 404  | payment                 | платеж не найден               |
-| IDEMPOTENCY_KEY_CONFLICT| 409  | ledger, payment         | ключ использован с другим телом|
-| INSUFFICIENT_FUNDS      | 422  | ledger (в payment — в теле) | недостаточно средств       |
-| WALLET_BLOCKED          | 422  | ledger (в payment — в теле) | кошелек заблокирован       |
-| LEDGER_UNAVAILABLE      | 503  | payment                 | ledger недоступен, retry       |
+| code                    | HTTP | где                         | смысл                           |
+|-------------------------|------|-----------------------------|---------------------------------|
+| VALIDATION_ERROR        | 400  | все                         | невалидный запрос               |
+| WALLET_NOT_FOUND        | 404  | ledger, payment             | кошелек не найден               |
+| PAYMENT_NOT_FOUND       | 404  | payment                     | платеж не найден                |
+| IDEMPOTENCY_KEY_CONFLICT| 409  | ledger, payment             | ключ использован с другим телом |
+| INSUFFICIENT_FUNDS      | 422  | ledger (в payment — в теле) | недостаточно средств            |
+| WALLET_BLOCKED          | 422  | ledger (в payment — в теле) | кошелек заблокирован            |
+| LEDGER_UNAVAILABLE      | 503  | payment                     | ledger недоступен, retry        |
+| RATE_LIMIT_EXCEEDED     | 429  | все публичные               | превышен лимит запросов         |
