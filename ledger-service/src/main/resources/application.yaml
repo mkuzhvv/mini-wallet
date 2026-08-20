@@ -2,6 +2,21 @@ spring:
   application:
     name: ledger-service
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/miniwallet?currentSchema=ledger
+    username: wallet
+    password: wallet
+
+  flyway:
+    schemas:
+      - ledger
+    locations:
+      - classpath:db/migration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
 
 server:
   port: 8081
