@@ -5,13 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/docker/docker-compose.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/Wallet.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/WalletStatus.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/resources/db/migration/V1__create_ledger_tables.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/LedgerEntry.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/LedgerEntryDirection.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/LedgerTransaction.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/LedgerTransactionStatus.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/LedgerTransactionType.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/LedgerEntryRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/LedgerTransactionRepository.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/resources/application.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -21,8 +22,10 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="Class" />
         <option value="Record" />
+        <option value="Class" />
+        <option value="Interface" />
+        <option value="Enum" />
       </list>
     </option>
   </component>
@@ -149,7 +152,7 @@
       <workItem from="1786812726330" duration="6000" />
       <workItem from="1786918526570" duration="202000" />
       <workItem from="1786919123956" duration="4269000" />
-      <workItem from="1787221679899" duration="13620000" />
+      <workItem from="1787221679899" duration="24779000" />
     </task>
     <servers />
   </component>
