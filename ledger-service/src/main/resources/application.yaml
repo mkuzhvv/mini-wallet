@@ -2,6 +2,10 @@ spring:
   application:
     name: ledger-service
 
+  mvc:
+    problemdetails:
+      enabled: true
+
   datasource:
     url: jdbc:postgresql://localhost:5432/miniwallet?currentSchema=ledger
     username: wallet
