@@ -1,6 +1,7 @@
 package com.mini_wallet.ledger_service.entity;
 
 import jakarta.persistence.*;
+import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -8,7 +9,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "wallets")
+@Getter
 public class Wallet {
+
+    public static final String SYSTEM_USER_ID = "SYSTEM";
 
     @Id
     private UUID id;
@@ -32,12 +36,8 @@ public class Wallet {
     protected Wallet() {
     }
 
-    public static Wallet create(String userId, String currency) {
-        return new Wallet(UUID.randomUUID(), userId, currency,
-                WalletStatus.ACTIVE, BigDecimal.ZERO, Instant.now());
-    }
-
-    public Wallet(UUID id, String userId, String currency, WalletStatus status, BigDecimal balance, Instant createdAt) {
+    public Wallet(UUID id, String userId, String currency, WalletStatus status,
+                  BigDecimal balance, Instant createdAt) {
         this.id = id;
         this.userId = userId;
         this.currency = currency;
@@ -46,27 +46,24 @@ public class Wallet {
         this.createdAt = createdAt;
     }
 
-    public UUID getId() {
-        return id;
+    public static Wallet create(String userId, String currency) {
+        return new Wallet(UUID.randomUUID(), userId, currency,
+                WalletStatus.ACTIVE, BigDecimal.ZERO, Instant.now());
     }
 
-    public String getUserId() {
-        return userId;
+    public boolean isSystem() {
+        return SYSTEM_USER_ID.equals(userId);
     }
 
-    public String getCurrency() {
-        return currency;
+    public void credit(BigDecimal amount) {
+        this.balance = this.balance.add(amount);
     }
 
-    public WalletStatus getStatus() {
-        return status;
-    }
-
-    public BigDecimal getBalance() {
-        return balance;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
+    public void debit(BigDecimal amount) {
+        BigDecimal result = this.balance.subtract(amount);
+        if (!isSystem() && result.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("wallet balance can't be negative");
+        }
+        this.balance = result;
     }
 }

@@ -5,15 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/WalletService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/WalletController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/CreateWalletRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/WalletResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/WalletNotFoundException.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/LedgerOperationService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/EqualsWalletsException.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/InsufficientFundsException.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/InvalidOperationException.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/WalletBlockedException.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/resources/application.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/Wallet.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/entity/Wallet.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/WalletRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/WalletRepository.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -25,8 +24,8 @@
       <list>
         <option value="Interface" />
         <option value="Enum" />
-        <option value="Class" />
         <option value="Record" />
+        <option value="Class" />
         <option value="Exception" />
       </list>
     </option>
@@ -155,7 +154,8 @@
       <workItem from="1786918526570" duration="202000" />
       <workItem from="1786919123956" duration="4269000" />
       <workItem from="1787221679899" duration="26552000" />
-      <workItem from="1787415910908" duration="2777000" />
+      <workItem from="1787415910908" duration="5693000" />
+      <workItem from="1787434912280" duration="5949000" />
     </task>
     <servers />
   </component>
