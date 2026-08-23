@@ -27,6 +27,7 @@ public class LedgerOperationService {
     public LedgerTransaction executeOperation(LedgerTransactionType type, BigDecimal amount, String currency,
                                               UUID sourceId, UUID targetId,
                                               UUID externalRef, String idempotencyKey) {
+
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvalidOperationException("amount must be positive");
         }
@@ -34,7 +35,7 @@ public class LedgerOperationService {
             throw new EqualsWalletsException("source wallet = target wallet");
         }
 
-        // 1. Блокируем кошельки в ФИКСИРОВАННОМ порядке (защита от deadlock)
+        //блокируем кошельки в фиксированном порядке по меньшему uuid(защита от deadlock)
         UUID firstId  = sourceId.compareTo(targetId) < 0 ? sourceId  : targetId;
         UUID secondId = sourceId.compareTo(targetId) < 0 ? targetId  : sourceId;
 
@@ -42,9 +43,9 @@ public class LedgerOperationService {
         Wallet second = lockWallet(secondId);
 
         Wallet source = first.getId().equals(sourceId) ? first : second;
-        Wallet target = first.getId().equals(sourceId) ? second : first;
+        Wallet target = second.getId().equals(targetId) ? second : first;
 
-        // 2. Валидации
+        //валидации
         validateStatus(source);
         validateStatus(target);
 
@@ -59,18 +60,16 @@ public class LedgerOperationService {
             throw new InsufficientFundsException("insufficient funds on wallet " + source.getId());
         }
 
-        // 3. Создаем операцию и две проводки (двойная запись)
+        //создаем операцию и две проводки
         LedgerTransaction tx = LedgerTransaction.create(
                 type, amount, currency, sourceId, targetId, externalRef, idempotencyKey);
 
         LedgerEntry debit  = LedgerEntry.create(tx.getId(), sourceId, LedgerEntryDirection.DEBIT, amount);
         LedgerEntry credit = LedgerEntry.create(tx.getId(), targetId, LedgerEntryDirection.CREDIT, amount);
 
-        // 4. Двигаем балансы
         source.debit(amount);
         target.credit(amount);
 
-        // 5. Сохраняем
         transactionRepository.save(tx);
         entryRepository.saveAll(List.of(debit, credit));
 

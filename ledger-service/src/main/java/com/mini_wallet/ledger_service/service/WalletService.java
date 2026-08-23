@@ -5,6 +5,7 @@ import com.mini_wallet.ledger_service.repository.WalletRepository;
 import com.mini_wallet.ledger_service.web.dto.CreateWalletRequest;
 import com.mini_wallet.ledger_service.web.dto.WalletResponse;
 import com.mini_wallet.ledger_service.web.error.WalletNotFoundException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,13 +14,10 @@ import java.util.UUID;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class WalletService {
 
     private final WalletRepository walletRepository;
-
-    public WalletService(WalletRepository walletRepository) {
-        this.walletRepository = walletRepository;
-    }
 
     @Transactional
     public WalletResponse createWallet(CreateWalletRequest request) {
