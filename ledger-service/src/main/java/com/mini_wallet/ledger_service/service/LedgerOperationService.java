@@ -4,8 +4,6 @@ import com.mini_wallet.ledger_service.entity.*;
 import com.mini_wallet.ledger_service.repository.LedgerEntryRepository;
 import com.mini_wallet.ledger_service.repository.LedgerTransactionRepository;
 import com.mini_wallet.ledger_service.repository.WalletRepository;
-import com.mini_wallet.ledger_service.web.dto.ExecuteOperationRequest;
-import com.mini_wallet.ledger_service.web.dto.LedgerOperationResponse;
 import com.mini_wallet.ledger_service.web.error.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -27,72 +24,88 @@ public class LedgerOperationService {
     private final LedgerEntryRepository entryRepository;
 
     @Transactional
-    public LedgerOperationResponse executeOperation(ExecuteOperationRequest request) {
+    public LedgerTransaction executeOperation(LedgerTransactionType type, BigDecimal amount, String currency,
+                                              UUID sourceId, UUID targetId,
+                                              UUID externalRef, String idempotencyKey) {
 
-        //если транзакция уже была создана вовзращаем готовую из бд
-        Optional<LedgerTransaction> existing = transactionRepository.findByIdempotencyKey(request.idempotencyKey());
-        if (existing.isPresent()) {
-            return LedgerOperationResponse.from(existing.get());
-        }
+        // идемпотентность: если уже проводили — возвращаем существующую
+        return transactionRepository.findByIdempotencyKey(idempotencyKey)
+                .map(existing -> {
+                    log.info("idempotent replay: key={}", idempotencyKey);
+                    return existing;
+                })
+                .orElseGet(() -> doExecute(type, amount, currency, sourceId, targetId, externalRef, idempotencyKey));
+    }
 
-        if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
+    private LedgerTransaction doExecute(LedgerTransactionType type, BigDecimal amount, String currency,
+                                        UUID sourceId, UUID targetId,
+                                        UUID externalRef, String idempotencyKey) {
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("invalid amount: {}", amount);
             throw new InvalidOperationException("amount must be positive");
         }
-        if (request.sourceWalletId().equals(request.targetWalletId())) {
+        if (sourceId.equals(targetId)) {
+            log.warn("source == target: {}", sourceId);
             throw new EqualsWalletsException("source wallet = target wallet");
         }
 
-        //блокируем кошельки в фиксированном порядке по меньшему uuid(защита от deadlock)
-        UUID firstId  = request.sourceWalletId().compareTo(request.targetWalletId()) < 0 ? request.sourceWalletId()  : request.targetWalletId();
-        UUID secondId = request.sourceWalletId().compareTo(request.targetWalletId()) < 0 ? request.targetWalletId()  : request.sourceWalletId();
+        // блокируем в фиксированном порядке (защита от deadlock)
+        UUID firstId  = sourceId.compareTo(targetId) < 0 ? sourceId  : targetId;
+        UUID secondId = sourceId.compareTo(targetId) < 0 ? targetId  : sourceId;
 
         Wallet first  = lockWallet(firstId);
         Wallet second = lockWallet(secondId);
 
-        Wallet source = first.getId().equals(request.sourceWalletId()) ? first : second;
-        Wallet target = second.getId().equals(request.targetWalletId()) ? second : first;
+        Wallet source = first.getId().equals(sourceId) ? first : second;
+        Wallet target = second.getId().equals(targetId) ? second : first;
 
-        //валидации
         validateStatus(source);
         validateStatus(target);
 
-        if (request.type() == LedgerTransactionType.DEPOSIT && !source.isSystem()) {
+        if (type == LedgerTransactionType.DEPOSIT && !source.isSystem()) {
+            log.warn("DEPOSIT from non-SYSTEM wallet: {}", sourceId);
             throw new InvalidOperationException("DEPOSIT must come from SYSTEM wallet");
         }
-        if (request.type() == LedgerTransactionType.TRANSFER && source.isSystem()) {
+        if (type == LedgerTransactionType.TRANSFER && source.isSystem()) {
+            log.warn("TRANSFER from SYSTEM wallet: {}", sourceId);
             throw new InvalidOperationException("TRANSFER can't come from SYSTEM wallet");
         }
-        if (request.type() == LedgerTransactionType.TRANSFER
-                && source.getBalance().compareTo(request.amount()) < 0) {
+        if (type == LedgerTransactionType.TRANSFER
+                && source.getBalance().compareTo(amount) < 0) {
+            log.warn("insufficient funds: wallet={}, balance={}, requested={}",
+                    source.getId(), source.getBalance(), amount);
             throw new InsufficientFundsException("insufficient funds on wallet " + source.getId());
         }
 
-        //создаем операцию и две проводки
         LedgerTransaction tx = LedgerTransaction.create(
-                request.type(), request.amount(), request.currency(), request.sourceWalletId(),
-                request.targetWalletId(), request.externalRef(), request.idempotencyKey());
+                type, amount, currency, sourceId, targetId, externalRef, idempotencyKey);
 
-        LedgerEntry debit  = LedgerEntry.create(tx.getId(), tx.getSourceWalletId(), LedgerEntryDirection.DEBIT, tx.getAmount());
-        LedgerEntry credit = LedgerEntry.create(tx.getId(), tx.getTargetWalletId(), LedgerEntryDirection.CREDIT, tx.getAmount());
+        LedgerEntry debit  = LedgerEntry.create(tx.getId(), sourceId, LedgerEntryDirection.DEBIT, amount);
+        LedgerEntry credit = LedgerEntry.create(tx.getId(), targetId, LedgerEntryDirection.CREDIT, amount);
 
-        source.debit(tx.getAmount());
-        target.credit(tx.getAmount());
+        source.debit(amount);
+        target.credit(amount);
 
         transactionRepository.save(tx);
         entryRepository.saveAll(List.of(debit, credit));
 
-        log.info("operation {} posted: {} {} from {} to {}", tx.getId(), tx.getAmount(), tx.getCurrency(), tx.getSourceWalletId(), tx.getTargetWalletId());
-
-        return LedgerOperationResponse.from(tx);
+        log.info("operation posted: id={}, type={}, amount={}, from={}, to={}",
+                tx.getId(), type, amount, sourceId, targetId);
+        return tx;
     }
 
     private Wallet lockWallet(UUID id) {
         return walletRepository.findByIdForUpdate(id)
-                .orElseThrow(() -> new WalletNotFoundException("wallet not found with id = " + id));
+                .orElseThrow(() -> {
+                    log.warn("wallet not found: id={}", id);
+                    return new WalletNotFoundException("wallet not found with id = " + id);
+                });
     }
 
     private void validateStatus(Wallet wallet) {
         if (wallet.getStatus() != WalletStatus.ACTIVE) {
+            log.warn("wallet blocked: id={}", wallet.getId());
             throw new WalletBlockedException("wallet " + wallet.getId() + " is blocked");
         }
     }

@@ -1,5 +1,6 @@
 package com.mini_wallet.ledger_service.web;
 
+import com.mini_wallet.ledger_service.entity.Wallet;
 import com.mini_wallet.ledger_service.service.WalletService;
 import com.mini_wallet.ledger_service.web.dto.CreateWalletRequest;
 import com.mini_wallet.ledger_service.web.dto.WalletResponse;
@@ -20,12 +21,13 @@ public class WalletController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public WalletResponse create(@Valid @RequestBody CreateWalletRequest request) {
-        return walletService.createWallet(request);
+        Wallet wallet = walletService.createWallet(request.userId(), request.currency());
+        return WalletResponse.from(wallet);
     }
 
     @GetMapping("/{id}")
-    @ResponseStatus(HttpStatus.OK)
     public WalletResponse get(@PathVariable UUID id) {
-        return walletService.getWallet(id);
+        Wallet wallet = walletService.getWallet(id);
+        return WalletResponse.from(wallet);
     }
 }

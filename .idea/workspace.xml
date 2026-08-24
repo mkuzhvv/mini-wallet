@@ -4,15 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/LedgerOperationController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/ExecuteOperationRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/LedgerOperationResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/LedgerTransactionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/LedgerTransactionRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/LedgerOperationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/LedgerOperationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/WalletController.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/WalletController.java" afterDir="false" />
-    </list>
+    <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -159,7 +151,7 @@
       <workItem from="1787488953870" duration="993000" />
       <workItem from="1787495859679" duration="48000" />
       <workItem from="1787501842519" duration="732000" />
-      <workItem from="1787519090659" duration="6266000" />
+      <workItem from="1787519090659" duration="6663000" />
     </task>
     <servers />
   </component>
