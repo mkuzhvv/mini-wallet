@@ -28,7 +28,7 @@ public class LedgerOperationService {
                                               UUID sourceId, UUID targetId,
                                               UUID externalRef, String idempotencyKey) {
 
-        // идемпотентность: если уже проводили — возвращаем существующую
+        //идемпотентность если уже проводили — возвращаем существующую
         return transactionRepository.findByIdempotencyKey(idempotencyKey)
                 .map(existing -> {
                     log.info("idempotent replay: key={}", idempotencyKey);
@@ -50,9 +50,11 @@ public class LedgerOperationService {
             throw new EqualsWalletsException("source wallet = target wallet");
         }
 
-        // блокируем в фиксированном порядке (защита от deadlock)
-        UUID firstId  = sourceId.compareTo(targetId) < 0 ? sourceId  : targetId;
-        UUID secondId = sourceId.compareTo(targetId) < 0 ? targetId  : sourceId;
+        //блокируем в фиксированном порядке (защита от deadlock)
+        //всегда сначала блокируем кошелек с меньшим UUID
+        boolean sourceFirst = sourceId.compareTo(targetId) < 0;
+        UUID firstId  = sourceFirst ? sourceId : targetId;
+        UUID secondId = sourceFirst ? targetId : sourceId;
 
         Wallet first  = lockWallet(firstId);
         Wallet second = lockWallet(secondId);
@@ -71,8 +73,7 @@ public class LedgerOperationService {
             log.warn("TRANSFER from SYSTEM wallet: {}", sourceId);
             throw new InvalidOperationException("TRANSFER can't come from SYSTEM wallet");
         }
-        if (type == LedgerTransactionType.TRANSFER
-                && source.getBalance().compareTo(amount) < 0) {
+        if (type == LedgerTransactionType.TRANSFER && source.getBalance().compareTo(amount) < 0) {
             log.warn("insufficient funds: wallet={}, balance={}, requested={}",
                     source.getId(), source.getBalance(), amount);
             throw new InsufficientFundsException("insufficient funds on wallet " + source.getId());
