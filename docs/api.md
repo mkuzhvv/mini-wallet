@@ -13,12 +13,15 @@
 - Имена полей в JSON — camelCase, в БД — snake_case
 - Заголовок `Idempotency-Key` обязателен для `POST /api/v1/payments`
 
-Формат ошибки:
+Формат ошибки — RFC 7807 (ProblemDetail) + поле `code`:
 
 ```json
 {
-  "code": "INSUFFICIENT_FUNDS",
-  "message": "Недостаточно средств на кошельке-источнике"
+  "type": "about:blank",
+  "title": "Unprocessable Content",
+  "status": 422,
+  "detail": "insufficient funds on wallet ...",
+  "code": "INSUFFICIENT_FUNDS"
 }
 ```
 
