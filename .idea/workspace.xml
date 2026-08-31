@@ -5,14 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/GlobalExceptionHandler.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/entity/Payment.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/entity/PaymentStatus.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/entity/PaymentType.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/repository/PaymentRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/payment-service/src/main/resources/db/migration/V1__create_payment_tables.sql" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/api.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/api.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/EqualsWalletsException.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/EqualsWalletsException.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/InsufficientFundsException.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/InsufficientFundsException.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/InvalidOperationException.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/InvalidOperationException.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/WalletBlockedException.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/WalletBlockedException.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/WalletNotFoundException.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/error/WalletNotFoundException.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/src/main/resources/application.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,11 +22,11 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="Interface" />
-        <option value="Enum" />
         <option value="Record" />
         <option value="Exception" />
         <option value="Class" />
+        <option value="Enum" />
+        <option value="Interface" />
       </list>
     </option>
   </component>
@@ -109,13 +109,14 @@
           <value>
             <map>
               <entry key="LedgerServiceApplication" value="STOPPED" />
+              <entry key="PaymentServiceApplication" value="STOPPED" />
             </map>
           </value>
         </entry>
       </map>
     </option>
   </component>
-  <component name="RunManager" selected="Spring Boot.LedgerServiceApplication">
+  <component name="RunManager" selected="Spring Boot.PaymentServiceApplication">
     <configuration name="LedgerServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
       <module name="ledger-service" />
       <option name="SPRING_BOOT_MAIN_CLASS" value="com.mini_wallet.ledger_service.LedgerServiceApplication" />
@@ -166,7 +167,7 @@
       <workItem from="1787501842519" duration="732000" />
       <workItem from="1787519090659" duration="6663000" />
       <workItem from="1788009781878" duration="2831000" />
-      <workItem from="1788014257192" duration="15502000" />
+      <workItem from="1788014257192" duration="24108000" />
     </task>
     <servers />
   </component>
