@@ -20,12 +20,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InsufficientFundsException.class)
     public ProblemDetail insufficientFunds(RuntimeException e) {
-        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "INSUFFICIENT_FUNDS", e.getMessage());
+        return problem(HttpStatus.UNPROCESSABLE_CONTENT, "INSUFFICIENT_FUNDS", e.getMessage());
     }
 
     @ExceptionHandler(WalletBlockedException.class)
     public ProblemDetail walletBlocked(RuntimeException e) {
-        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "WALLET_BLOCKED", e.getMessage());
+        return problem(HttpStatus.UNPROCESSABLE_CONTENT, "WALLET_BLOCKED", e.getMessage());
     }
 
     @ExceptionHandler({EqualsWalletsException.class, InvalidOperationException.class})

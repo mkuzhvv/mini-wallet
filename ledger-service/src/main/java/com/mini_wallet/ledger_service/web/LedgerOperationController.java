@@ -7,6 +7,7 @@ import com.mini_wallet.ledger_service.web.dto.LedgerOperationResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,7 +19,8 @@ public class LedgerOperationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public LedgerOperationResponse execute(@Valid @RequestBody ExecuteOperationRequest request) {
+    public ResponseEntity<LedgerOperationResponse> execute(@Valid @RequestBody ExecuteOperationRequest request) {
+
         LedgerTransaction tx = ledgerOperationService.executeOperation(
                 request.type(),
                 request.amount(),
@@ -27,6 +29,7 @@ public class LedgerOperationController {
                 request.targetWalletId(),
                 request.externalRef(),
                 request.idempotencyKey());
-        return LedgerOperationResponse.from(tx);
+
+        return ResponseEntity.status(HttpStatus.OK).body(LedgerOperationResponse.from(tx));
     }
 }

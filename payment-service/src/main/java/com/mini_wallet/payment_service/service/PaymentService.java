@@ -1,6 +1,7 @@
 package com.mini_wallet.payment_service.service;
 
 import com.mini_wallet.payment_service.entity.Payment;
+import com.mini_wallet.payment_service.entity.PaymentStatus;
 import com.mini_wallet.payment_service.entity.PaymentType;
 import com.mini_wallet.payment_service.repository.PaymentRepository;
 import com.mini_wallet.payment_service.web.dto.CreatePaymentRequest;
@@ -20,6 +21,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -37,6 +39,22 @@ public class PaymentService {
 
     @Transactional
     public Payment createPayment(CreatePaymentRequest request, String idempotencyKey) {
+        //проверяем идемпотентность
+        Optional<Payment> existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            Payment pm = existing.get();
+
+            if (isTerminal(pm.getStatus())) {
+                if (!samePayload(pm, request)) {
+                    log.warn("idempotency key conflict: key={}", idempotencyKey);
+                    throw new IdempotencyKeyConflictException("same key, different payload");
+                }
+                return pm; //такой завершенный/отмененный платеж уже есть - возвращаем
+            }
+            //ретраим (при FAILED)
+            return executePayment(pm);
+        }
+
 
         if (request.type().equals(PaymentType.TRANSFER) && request.sourceWalletId() == null) {
             log.warn("invalid source wallet: {}", (Object) null);
@@ -49,8 +67,22 @@ public class PaymentService {
 
         Payment pm = Payment.create(idempotencyKey, request.type(), resolveSource(request),
                 request.targetWalletId(), request.amount(), request.currency(), request.description());
-
         paymentRepository.save(pm);
+
+        return executePayment(pm);
+    }
+
+    private boolean isTerminal(PaymentStatus status) {
+        return status.equals(PaymentStatus.REJECTED) || status.equals(PaymentStatus.SUCCESS);
+    }
+
+    private boolean samePayload(Payment pm, CreatePaymentRequest request) {
+        return pm.getType().equals(request.type()) && pm.getSourceWalletId().equals(request.sourceWalletId()) &&
+                pm.getTargetWalletId().equals(request.targetWalletId()) && pm.getAmount().compareTo(request.amount()) == 0
+                && pm.getCurrency().equals(request.currency());
+    }
+    
+    private Payment executePayment(Payment pm) {
         pm.markProcessing();
 
         //сборка команды для ledger service
@@ -64,6 +96,7 @@ public class PaymentService {
                     .body(cmd)
                     .retrieve()
                     .body(LedgerOperationResult.class);
+
             pm.markSuccess();
         } catch (RestClientResponseException e) {
             handleLedgerError(pm, e);
@@ -85,7 +118,7 @@ public class PaymentService {
         String code = extractCode(e.getResponseBodyAsString());
 
         switch (status) {
-            case UNPROCESSABLE_ENTITY, NOT_FOUND ->
+            case UNPROCESSABLE_CONTENT, NOT_FOUND ->
                     pm.markRejected(code != null ? code : "LEDGER_REJECTED");
             case CONFLICT ->
                     throw new IdempotencyKeyConflictException("ledger idempotency conflict");

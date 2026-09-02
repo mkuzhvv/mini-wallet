@@ -7,6 +7,7 @@ import com.mini_wallet.ledger_service.web.dto.WalletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -20,14 +21,14 @@ public class WalletController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public WalletResponse create(@Valid @RequestBody CreateWalletRequest request) {
+    public ResponseEntity<WalletResponse> create(@Valid @RequestBody CreateWalletRequest request) {
         Wallet wallet = walletService.createWallet(request.userId(), request.currency());
-        return WalletResponse.from(wallet);
+        return ResponseEntity.status(HttpStatus.CREATED).body(WalletResponse.from(wallet));
     }
 
     @GetMapping("/{id}")
-    public WalletResponse get(@PathVariable UUID id) {
+    public ResponseEntity<WalletResponse> get(@PathVariable UUID id) {
         Wallet wallet = walletService.getWallet(id);
-        return WalletResponse.from(wallet);
+        return ResponseEntity.status(HttpStatus.OK).body(WalletResponse.from(wallet));
     }
 }
