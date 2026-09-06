@@ -3,12 +3,16 @@ package com.mini_wallet.ledger_service.service;
 import com.mini_wallet.ledger_service.entity.*;
 import com.mini_wallet.ledger_service.repository.LedgerEntryRepository;
 import com.mini_wallet.ledger_service.repository.LedgerTransactionRepository;
+import com.mini_wallet.ledger_service.repository.OutboxRepository;
 import com.mini_wallet.ledger_service.repository.WalletRepository;
+import com.mini_wallet.ledger_service.web.dto.TransactionPostedEvent;
 import com.mini_wallet.ledger_service.web.error.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,6 +26,8 @@ public class LedgerOperationService {
     private final WalletRepository walletRepository;
     private final LedgerTransactionRepository transactionRepository;
     private final LedgerEntryRepository entryRepository;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public LedgerTransaction executeOperation(LedgerTransactionType type, BigDecimal amount, String currency,
@@ -91,6 +97,12 @@ public class LedgerOperationService {
         transactionRepository.save(tx);
         entryRepository.saveAll(List.of(debit, credit));
 
+        //отправляем событие в outbox в одной транзакции
+        TransactionPostedEvent event = new TransactionPostedEvent(
+                tx.getId(), tx.getType().name(), tx.getAmount(), tx.getCurrency(),
+                tx.getSourceWalletId(), tx.getTargetWalletId(), tx.getCreatedAt());
+        outboxRepository.save(OutboxEvent.create("TRANSACTION_POSTED", toJson(event)));
+
         log.info("operation posted: id={}, type={}, amount={}, from={}, to={}",
                 tx.getId(), type, amount, sourceId, targetId);
         return tx;
@@ -108,6 +120,14 @@ public class LedgerOperationService {
         if (wallet.getStatus() != WalletStatus.ACTIVE) {
             log.warn("wallet blocked: id={}", wallet.getId());
             throw new WalletBlockedException("wallet " + wallet.getId() + " is blocked");
+        }
+    }
+
+    private String toJson(TransactionPostedEvent event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("failed to serialize outbox event", e);
         }
     }
 }
