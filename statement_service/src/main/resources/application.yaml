@@ -2,6 +2,33 @@ spring:
   application:
     name: statement_service
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/miniwallet?currentSchema=statement
+    username: wallet
+    password: wallet
+
+  flyway:
+    schemas:
+      - statement
+    locations:
+      - classpath:db/migration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  mvc:
+    problemdetails:
+      enabled: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: statement-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 server:
   port: 8083
