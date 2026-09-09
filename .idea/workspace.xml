@@ -5,14 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/config/KafkaConfig.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/config/KafkaConfig.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/service/StatementService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/web/StatementController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/web/dto/StatementEntryResponse.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/StatementServiceApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/StatementServiceApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/repository/StatementRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/repository/StatementRepository.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -114,9 +107,9 @@
         <entry key="SpringBootApplicationConfigurationType">
           <value>
             <map>
-              <entry key="LedgerServiceApplication" value="FAILED" />
+              <entry key="LedgerServiceApplication" value="STOPPED" />
               <entry key="PaymentServiceApplication" value="STOPPED" />
-              <entry key="StatementServiceApplication" value="FAILED" />
+              <entry key="StatementServiceApplication" value="STOPPED" />
             </map>
           </value>
         </entry>
