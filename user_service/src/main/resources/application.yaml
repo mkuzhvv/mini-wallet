@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: user-service
+
+  mvc:
+    problemdetails:
+      enabled: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/miniwallet?currentSchema=user_service
+    username: wallet
+    password: wallet
+
+  flyway:
+    schemas:
+      - user_service
+    locations:
+      - classpath:db/migration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+server:
+  port: 8084

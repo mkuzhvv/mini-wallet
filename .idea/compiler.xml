@@ -8,8 +8,9 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="statement_service" />
-        <module name="ledger-service" />
+        <module name="user_service" />
         <module name="payment-service" />
+        <module name="ledger-service" />
       </profile>
     </annotationProcessing>
   </component>
@@ -18,6 +19,7 @@
       <module name="ledger-service" options="-parameters" />
       <module name="payment-service" options="-parameters" />
       <module name="statement_service" options="-parameters" />
+      <module name="user_service" options="-parameters" />
     </option>
   </component>
 </project>
