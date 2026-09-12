@@ -11,6 +11,7 @@ import com.mini_wallet.payment_service.web.error.IdempotencyKeyConflictException
 import com.mini_wallet.payment_service.web.error.PaymentValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,9 +39,10 @@ public class PaymentService {
 
 
     @Transactional
-    public Payment createPayment(CreatePaymentRequest request, String idempotencyKey) {
+    public Payment createPayment(CreatePaymentRequest request, String idempotencyKey,
+                                 String userId, String authorization) {
         //проверяем идемпотентность
-        Optional<Payment> existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
+        Optional<Payment> existing = paymentRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
         if (existing.isPresent()) {
             Payment pm = existing.get();
 
@@ -52,7 +54,7 @@ public class PaymentService {
                 return pm; //такой завершенный/отмененный платеж уже есть - возвращаем
             }
             //ретраим (при FAILED)
-            return executePayment(pm);
+            return executePayment(pm, authorization);
         }
 
 
@@ -65,11 +67,11 @@ public class PaymentService {
             throw new PaymentValidationException("for DEPOSIT source wallet must be null");
         }
 
-        Payment pm = Payment.create(idempotencyKey, request.type(), resolveSource(request),
+        Payment pm = Payment.create(idempotencyKey, userId, request.type(), resolveSource(request),
                 request.targetWalletId(), request.amount(), request.currency(), request.description());
         paymentRepository.save(pm);
 
-        return executePayment(pm);
+        return executePayment(pm, authorization);
     }
 
     private boolean isTerminal(PaymentStatus status) {
@@ -77,12 +79,12 @@ public class PaymentService {
     }
 
     private boolean samePayload(Payment pm, CreatePaymentRequest request) {
-        return pm.getType().equals(request.type()) && pm.getSourceWalletId().equals(request.sourceWalletId()) &&
+        return pm.getType().equals(request.type()) && pm.getSourceWalletId().equals(resolveSource(request)) &&
                 pm.getTargetWalletId().equals(request.targetWalletId()) && pm.getAmount().compareTo(request.amount()) == 0
                 && pm.getCurrency().equals(request.currency());
     }
     
-    private Payment executePayment(Payment pm) {
+    private Payment executePayment(Payment pm, String authorization) {
         pm.markProcessing();
 
         //сборка команды для ledger service
@@ -93,6 +95,7 @@ public class PaymentService {
         try {
             LedgerOperationResult res = ledgerClient.post()
                     .uri("/internal/v1/operations")
+                    .header(HttpHeaders.AUTHORIZATION, authorization)
                     .body(cmd)
                     .retrieve()
                     .body(LedgerOperationResult.class);

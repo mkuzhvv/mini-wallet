@@ -16,6 +16,9 @@ public class Payment {
     @Column(nullable = false)
     private String idempotencyKey;
 
+    @Column(nullable = false)
+    private String userId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PaymentType type;
@@ -48,11 +51,13 @@ public class Payment {
     protected Payment() {
     }
 
-    public Payment(UUID id, String idempotencyKey, PaymentType type, UUID sourceWalletId, UUID targetWalletId,
+    public Payment(UUID id, String idempotencyKey, String userId, PaymentType type,
+                   UUID sourceWalletId, UUID targetWalletId,
                    BigDecimal amount, String currency, PaymentStatus status, String failureReason, String description,
                    Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.idempotencyKey = idempotencyKey;
+        this.userId = userId;
         this.type = type;
         this.sourceWalletId = sourceWalletId;
         this.targetWalletId = targetWalletId;
@@ -65,7 +70,7 @@ public class Payment {
         this.updatedAt = updatedAt;
     }
 
-    public static Payment create(String idempotencyKey, PaymentType type,
+    public static Payment create(String idempotencyKey, String userId, PaymentType type,
                                  UUID sourceWalletId, UUID targetWalletId,
                                  BigDecimal amount, String currency, String description) {
 
@@ -73,7 +78,7 @@ public class Payment {
             throw new IllegalArgumentException("Amount must be positive");
         }
         Instant now = Instant.now();
-        return new Payment(UUID.randomUUID(), idempotencyKey, type, sourceWalletId, targetWalletId,
+        return new Payment(UUID.randomUUID(), idempotencyKey, userId, type, sourceWalletId, targetWalletId,
                 amount, currency, PaymentStatus.NEW, null, description, now, now);
     }
 
@@ -89,6 +94,10 @@ public class Payment {
 
     public String getIdempotencyKey() {
         return idempotencyKey;
+    }
+
+    public String getUserId() {
+        return userId;
     }
 
     public PaymentType getType() {

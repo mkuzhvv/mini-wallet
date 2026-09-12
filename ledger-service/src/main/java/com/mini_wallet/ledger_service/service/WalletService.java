@@ -26,10 +26,10 @@ public class WalletService {
     }
 
     @Transactional(readOnly = true)
-    public Wallet getWallet(UUID id) {
-        return walletRepository.findById(id)
+    public Wallet getWallet(UUID id, String userId) {
+        return walletRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> {
-                    log.warn("wallet not found: id={}", id);
+                    log.warn("wallet not found for user: id={}, userId={}", id, userId);
                     return new WalletNotFoundException("wallet not found with id = " + id);
                 });
     }

@@ -19,7 +19,8 @@ public class StatementService {
     private final StatementRepository repository;
 
     @Transactional(readOnly = true)
-    public List<StatementEntry> getStatement(UUID walletId, Instant from, Instant to, int limit) {
-        return repository.findStatement(walletId, from, to, PageRequest.of(0, limit));
+    public List<StatementEntry> getStatement(UUID walletId, String userId,
+                                             Instant from, Instant to, int limit) {
+        return repository.findStatement(walletId, userId, from, to, PageRequest.of(0, limit));
     }
 }

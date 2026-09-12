@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,7 +21,9 @@ public class LedgerOperationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<LedgerOperationResponse> execute(@Valid @RequestBody ExecuteOperationRequest request) {
+    public ResponseEntity<LedgerOperationResponse> execute(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody ExecuteOperationRequest request) {
 
         LedgerTransaction tx = ledgerOperationService.executeOperation(
                 request.type(),
@@ -28,7 +32,8 @@ public class LedgerOperationController {
                 request.sourceWalletId(),
                 request.targetWalletId(),
                 request.externalRef(),
-                request.idempotencyKey());
+                request.idempotencyKey(),
+                jwt.getSubject());
 
         return ResponseEntity.status(HttpStatus.OK).body(LedgerOperationResponse.from(tx));
     }

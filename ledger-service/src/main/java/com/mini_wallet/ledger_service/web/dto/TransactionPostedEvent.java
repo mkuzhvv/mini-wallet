@@ -10,6 +10,8 @@ public record TransactionPostedEvent(
         BigDecimal amount,
         String currency,
         UUID sourceWalletId,
+        String sourceUserId,
         UUID targetWalletId,
+        String targetUserId,
         Instant createdAt
 ) {}

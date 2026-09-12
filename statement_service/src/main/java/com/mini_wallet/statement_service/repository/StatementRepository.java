@@ -15,11 +15,13 @@ public interface StatementRepository extends JpaRepository<StatementEntry, UUID>
 
     @Query("""
         SELECT e FROM StatementEntry e WHERE e.walletId = :walletId
+         AND e.userId = :userId
          AND (:from IS NULL OR e.createdAt >= :from)
          AND (:to   IS NULL OR e.createdAt <= :to)
         ORDER BY e.createdAt DESC
         """)
     List<StatementEntry> findStatement(@Param("walletId") UUID walletId,
+                                       @Param("userId") String userId,
                                        @Param("from") Instant from,
                                        @Param("to") Instant to,
                                        Pageable pageable);

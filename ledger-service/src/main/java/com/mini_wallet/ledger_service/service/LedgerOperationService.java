@@ -32,20 +32,22 @@ public class LedgerOperationService {
     @Transactional
     public LedgerTransaction executeOperation(LedgerTransactionType type, BigDecimal amount, String currency,
                                               UUID sourceId, UUID targetId,
-                                              UUID externalRef, String idempotencyKey) {
+                                              UUID externalRef, String idempotencyKey, String userId) {
 
         //идемпотентность если уже проводили — возвращаем существующую
         return transactionRepository.findByIdempotencyKey(idempotencyKey)
                 .map(existing -> {
+                    validateExistingOperationOwner(existing, userId);
                     log.info("idempotent replay: key={}", idempotencyKey);
                     return existing;
                 })
-                .orElseGet(() -> doExecute(type, amount, currency, sourceId, targetId, externalRef, idempotencyKey));
+                .orElseGet(() -> doExecute(type, amount, currency, sourceId, targetId,
+                        externalRef, idempotencyKey, userId));
     }
 
     private LedgerTransaction doExecute(LedgerTransactionType type, BigDecimal amount, String currency,
                                         UUID sourceId, UUID targetId,
-                                        UUID externalRef, String idempotencyKey) {
+                                        UUID externalRef, String idempotencyKey, String userId) {
 
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("invalid amount: {}", amount);
@@ -70,6 +72,7 @@ public class LedgerOperationService {
 
         validateStatus(source);
         validateStatus(target);
+        validateOwner(type, source, target, userId);
 
         if (type == LedgerTransactionType.DEPOSIT && !source.isSystem()) {
             log.warn("DEPOSIT from non-SYSTEM wallet: {}", sourceId);
@@ -100,7 +103,9 @@ public class LedgerOperationService {
         //отправляем событие в outbox в одной транзакции
         TransactionPostedEvent event = new TransactionPostedEvent(
                 tx.getId(), tx.getType().name(), tx.getAmount(), tx.getCurrency(),
-                tx.getSourceWalletId(), tx.getTargetWalletId(), tx.getCreatedAt());
+                tx.getSourceWalletId(), source.getUserId(),
+                tx.getTargetWalletId(), target.getUserId(),
+                tx.getCreatedAt());
         outboxRepository.save(OutboxEvent.create("TRANSACTION_POSTED", toJson(event)));
 
         log.info("operation posted: id={}, type={}, amount={}, from={}, to={}",
@@ -120,6 +125,30 @@ public class LedgerOperationService {
         if (wallet.getStatus() != WalletStatus.ACTIVE) {
             log.warn("wallet blocked: id={}", wallet.getId());
             throw new WalletBlockedException("wallet " + wallet.getId() + " is blocked");
+        }
+    }
+
+    private void validateExistingOperationOwner(LedgerTransaction transaction, String userId) {
+        Wallet source = findWallet(transaction.getSourceWalletId());
+        Wallet target = findWallet(transaction.getTargetWalletId());
+        validateOwner(transaction.getType(), source, target, userId);
+    }
+
+    private Wallet findWallet(UUID id) {
+        return walletRepository.findById(id)
+                .orElseThrow(() -> new WalletNotFoundException("wallet not found with id = " + id));
+    }
+
+    private void validateOwner(LedgerTransactionType type, Wallet source, Wallet target, String userId) {
+        boolean owned = switch (type) {
+            case DEPOSIT -> target.getUserId().equals(userId);
+            case TRANSFER -> source.getUserId().equals(userId);
+        };
+
+        if (!owned) {
+            UUID protectedWalletId = type == LedgerTransactionType.DEPOSIT ? target.getId() : source.getId();
+            log.warn("wallet does not belong to user: walletId={}, userId={}", protectedWalletId, userId);
+            throw new WalletNotFoundException("wallet not found with id = " + protectedWalletId);
         }
     }
 

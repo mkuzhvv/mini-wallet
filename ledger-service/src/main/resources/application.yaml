@@ -30,3 +30,8 @@ spring:
 
 server:
   port: 8081
+
+app:
+  jwt:
+    issuer: mini-wallet-user-service
+    public-key: classpath:keys/jwt-public.pem

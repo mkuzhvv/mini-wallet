@@ -5,15 +5,44 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5a8ccbc8-3d0d-4349-b8ca-0d1148dbde1c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/config/PasswordConfig.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/config/SecurityConfig.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/entity/UserAccount.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/entity/UserRole.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/entity/UserStatus.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/service/RegistrationService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/error/EmailAlreadyExistsException.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/error/GlobalExceptionHandler.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/config/AuthenticationConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/config/JwtConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/security/IssuedAccessToken.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/security/JwtTokenService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/security/UserAccountDetailsService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/security/UserPrincipal.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/service/LoginService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/service/model/LoginResult.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/dto/LoginRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/dto/LoginResponse.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/WalletRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/repository/WalletRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/LedgerOperationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/LedgerOperationService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/WalletService.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/service/WalletService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/LedgerOperationController.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/LedgerOperationController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/WalletController.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/WalletController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/CreateWalletRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/CreateWalletRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/TransactionPostedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/java/com/mini_wallet/ledger_service/web/dto/TransactionPostedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ledger-service/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/ledger-service/src/main/resources/application.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/entity/Payment.java" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/entity/Payment.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/repository/PaymentRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/repository/PaymentRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/service/PaymentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/service/PaymentService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/web/PaymentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/src/main/java/com/mini_wallet/payment_service/web/PaymentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/payment-service/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/payment-service/src/main/resources/application.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/consumer/TransactionPostedConsumer.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/consumer/TransactionPostedConsumer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/entity/StatementEntry.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/entity/StatementEntry.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/event/TransactionPostedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/event/TransactionPostedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/repository/StatementRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/repository/StatementRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/service/StatementService.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/service/StatementService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/web/StatementController.java" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/java/com/mini_wallet/statement_service/web/StatementController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/statement_service/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/statement_service/src/main/resources/application.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/AuthController.java" beforeDir="false" afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/AuthController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/error/GlobalExceptionHandler.java" beforeDir="false" afterPath="$PROJECT_DIR$/user_service/src/main/java/com/mini_wallet/user_service/web/error/GlobalExceptionHandler.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user_service/src/main/resources/application.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/user_service/src/main/resources/application.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,9 +53,9 @@
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Interface" />
-        <option value="Record" />
         <option value="Enum" />
         <option value="Exception" />
+        <option value="Record" />
         <option value="Class" />
       </list>
     </option>

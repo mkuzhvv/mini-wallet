@@ -29,3 +29,8 @@ ledger:
   base-url: http://localhost:8081
   connect-timeout: 2s
   read-timeout: 3s
+
+app:
+  jwt:
+    issuer: mini-wallet-user-service
+    public-key: classpath:keys/jwt-public.pem

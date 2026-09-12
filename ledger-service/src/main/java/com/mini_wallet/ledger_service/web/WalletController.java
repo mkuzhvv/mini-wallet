@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -21,14 +23,15 @@ public class WalletController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<WalletResponse> create(@Valid @RequestBody CreateWalletRequest request) {
-        Wallet wallet = walletService.createWallet(request.userId(), request.currency());
+    public ResponseEntity<WalletResponse> create(@AuthenticationPrincipal Jwt jwt,
+                                                  @Valid @RequestBody CreateWalletRequest request) {
+        Wallet wallet = walletService.createWallet(jwt.getSubject(), request.currency());
         return ResponseEntity.status(HttpStatus.CREATED).body(WalletResponse.from(wallet));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<WalletResponse> get(@PathVariable UUID id) {
-        Wallet wallet = walletService.getWallet(id);
+    public ResponseEntity<WalletResponse> get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        Wallet wallet = walletService.getWallet(id, jwt.getSubject());
         return ResponseEntity.status(HttpStatus.OK).body(WalletResponse.from(wallet));
     }
 }

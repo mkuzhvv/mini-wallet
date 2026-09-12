@@ -21,6 +21,9 @@ public class StatementEntry {
     @Column(name = "wallet_id", nullable = false)
     private UUID walletId;
 
+    @Column(name = "user_id", nullable = false)
+    private String userId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private StatementDirection direction;
@@ -43,18 +46,21 @@ public class StatementEntry {
 
     protected StatementEntry() {}
 
-    private StatementEntry(UUID id, UUID transactionId, UUID walletId, StatementDirection direction,
+    private StatementEntry(UUID id, UUID transactionId, UUID walletId, String userId,
+                           StatementDirection direction,
                            BigDecimal amount, String currency, UUID counterpartyWalletId,
                            StatementType type, Instant createdAt) {
         this.id = id; this.transactionId = transactionId; this.walletId = walletId;
+        this.userId = userId;
         this.direction = direction; this.amount = amount; this.currency = currency;
         this.counterpartyWalletId = counterpartyWalletId; this.type = type; this.createdAt = createdAt;
     }
 
-    public static StatementEntry create(UUID transactionId, UUID walletId, StatementDirection direction,
+    public static StatementEntry create(UUID transactionId, UUID walletId, String userId,
+                                        StatementDirection direction,
                                         BigDecimal amount, String currency, UUID counterparty,
                                         StatementType type, Instant createdAt) {
-        return new StatementEntry(UUID.randomUUID(), transactionId, walletId, direction,
+        return new StatementEntry(UUID.randomUUID(), transactionId, walletId, userId, direction,
                 amount, currency, counterparty, type, createdAt);
     }
 }

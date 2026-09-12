@@ -37,14 +37,20 @@ public class TransactionPostedConsumer {
             log.info("duplicate event skipped: tx= {}", event.transactionId());
             return;
         }
+        if (event.sourceUserId() == null || event.targetUserId() == null) {
+            log.warn("legacy event without wallet owners skipped: tx={}", event.transactionId());
+            return;
+        }
 
         StatementType type = StatementType.valueOf(event.type());
 
         StatementEntry out = StatementEntry.create(event.transactionId(), event.sourceWalletId(),
+                event.sourceUserId(),
                 StatementDirection.OUT, event.amount(), event.currency(),
                 event.targetWalletId(), type, event.createdAt());
 
         StatementEntry in = StatementEntry.create(event.transactionId(), event.targetWalletId(),
+                event.targetUserId(),
                 StatementDirection.IN, event.amount(), event.currency(),
                 event.sourceWalletId(), type, event.createdAt());
 
