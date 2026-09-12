@@ -22,5 +22,12 @@ spring:
       ddl-auto: validate
     open-in-view: false
 
+app:
+  jwt:
+    issuer: mini-wallet-user-service
+    access-token-ttl: 15m
+    private-key: classpath:keys/jwt-private.pem
+    public-key: classpath:keys/jwt-public.pem
+
 server:
   port: 8084

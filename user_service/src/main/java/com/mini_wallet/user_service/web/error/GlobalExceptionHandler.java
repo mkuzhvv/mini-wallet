@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -33,6 +34,11 @@ public class GlobalExceptionHandler {
     public ProblemDetail dataIntegrityViolation(DataIntegrityViolationException e) {
         log.warn("data integrity violation: {}", e.getMostSpecificCause().getMessage());
         return problem(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "email is already used");
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ProblemDetail authenticationFailed(AuthenticationException e) {
+        return problem(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS","invalid email or password");
     }
 
     private ProblemDetail problem(HttpStatus status, String code, String detail) {
