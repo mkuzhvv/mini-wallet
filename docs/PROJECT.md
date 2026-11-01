@@ -1,189 +1,106 @@
-# mini-wallet — проектная документация и передача контекста
+# Архитектура mini-wallet
 
-Документ для разработчиков и AI-агентов. Описывает, ЧТО построено, ПОЧЕМУ так, и ЧТО планируется дальше.
-Читай целиком перед любыми правками. Дополнительные контракты: `docs/domain.md`, `docs/api.md`, `docs/events.md`.
+Документ описывает текущую реализацию. Быстрый запуск и демонстрация — в [README](../README.md).
 
----
+## Сервисы и данные
 
-## 1. Что это за проект
+| Каталог | Ответственность | HTTP-порт внутри Docker | Схема PostgreSQL |
+| --- | --- | --- | --- |
+| `user_service` | Регистрация, проверка пароля, выдача JWT | 8084 | `user_service` |
+| `ledger-service` | Кошельки, балансы, операции, проводки и outbox | 8081 | `ledger` |
+| `payment-service` | Платёжные поручения, идемпотентность клиента и вызов ledger | 8082 | `payment` |
+| `statement_service` | Проекция выписки из Kafka и её HTTP API | 8083 | `statement` |
+| `gateway-service` | Маршрутизация публичного API и общая Swagger UI | 8085 | — |
 
-пет-проект «мини-кошелек»: микросервисный бэкенд на Spring Boot, реализующий
-пополнения и переводы между кошельками с двойной записью, идемпотентностью,
-событийной архитектурой (Kafka + outbox) и CQRS (read model выписки).
+Одна БД `miniwallet` разделена на четыре схемы. Сервисы работают со своими таблицами и миграциями; между схемами нет внешних ключей. Денежные операции целиком выполняет ledger.
 
-Цель проекта — освоить backend-разработку: Spring Boot, JPA/Postgres, Flyway,
-транзакции и блокировки, идемпотентность, HTTP-клиенты, Kafka, outbox и CQRS.
-JWT уже реализован. Итоговый объём: Docker Compose, OpenAPI, Spring Cloud Gateway, nginx и возможный gRPC для payment → ledger.
+nginx принимает запросы на `127.0.0.1:8080` и передаёт их gateway. Gateway выбирает бизнес-сервис, который проверяет JWT и права пользователя. Публичные маршруты описаны в [API](api.md). Внутренний `POST /internal/v1/operations` вызывается payment напрямую и не маршрутизируется gateway.
 
----
+## Как проходит платёж
 
-## 2. Технологический стек
+1. Клиент получает JWT в user и отправляет поручение в payment с `Idempotency-Key`.
+2. Payment извлекает пользователя из JWT и находит либо создаёт его платёж.
+3. Payment вызывает ledger по REST, передавая JWT клиента. `externalRef` и внутренний ключ идемпотентности равны `payment.id`.
+4. Ledger проверяет пользователя, принадлежность кошелька, допустимость операции и блокирует кошельки в порядке UUID.
+5. В одной транзакции PostgreSQL обновляются балансы, сохраняются операция, две проводки и строка outbox.
+6. Payment получает HTTP-ответ и сохраняет `SUCCESS`, `REJECTED` или `FAILED`.
+7. Outbox publisher отправляет событие в Kafka. Statement consumer строит две строки выписки.
 
-- Java 21, Spring Boot 4.1.0 (Spring Framework 7)
-- Spring Web (RestClient), Spring Data JPA, Bean Validation
-- PostgreSQL 16 (Docker), Flyway (миграции, режим `validate`)
-- Apache Kafka (Docker, образ `apache/kafka`, KRaft, без Zookeeper)
-- Lombok, Jackson
-- Реализовано: Spring Security / JWT, Dockerfile для пяти Java-сервисов, полный Compose, kafka-init, OpenAPI / общая Swagger UI, Spring Cloud Gateway и nginx. gRPC рассматривается для payment → ledger.
+Результат команды возвращается синхронно по REST. Выписка обновляется асинхронно: после успешного платежа допустима небольшая задержка её появления.
 
----
+## Деньги и конкурентные операции
 
-## 3. Архитектура: сервисы и связи
+- Java использует `BigDecimal`, PostgreSQL — `NUMERIC(19,2)`.
+- Каждой проведённой операции соответствуют DEBIT источника и CREDIT получателя на одну сумму.
+- Балансы, проводки и outbox изменяются в одной БД-транзакции.
+- Пессимистические блокировки кошельков предотвращают потерю обновлений. Одинаковый порядок захвата уменьшает риск взаимных блокировок.
+- Баланс обычного кошелька неотрицателен; это также проверяется ограничением БД.
+- Пополнение идёт из SYSTEM-кошелька `00000000-0000-0000-0000-000000000000`. Его отрицательный баланс отражает выпущенные в систему деньги.
 
-```text
-Клиент → nginx :8080 → gateway :8085 → user / ledger / payment / statement
-payment → REST + JWT → ledger → outbox → Kafka → statement
-Каждый бизнес-сервис работает со своей схемой PostgreSQL.
-```
+## Два уровня идемпотентности
 
-- **Команды** (payment → ledger): синхронный REST `POST /internal/v1/operations`.
-- **События** (ledger → Kafka → statement): асинхронные, через outbox.
-- Каждый сервис владеет своей схемой Postgres. **Между схемами НЕТ foreign keys.**
+**Клиент → payment.** Уникальна пара `(user_id, idempotency_key)`. Для завершённых `SUCCESS` / `REJECTED` повтор возвращает сохранённый платёж. Изменение типа, суммы, валюты или кошельков при том же ключе даёт 409. Описание в сравнении не участвует.
 
-Инфраструктура и приложения описаны в корневом `compose.yaml`; Dockerfile и настройки Maven — в `dockerfiles/`:
-- `miniwallet-postgres` :5432, БД `miniwallet`, user/pass `wallet`/`wallet`
-- `miniwallet-kafka` :9092 (KRaft single-node)
+**Payment → ledger.** Ключом команды служит UUID платежа. Повтор возвращает существующую операцию после проверки владельца; отдельного сравнения тела команды в ledger нет.
 
----
+`FAILED` допускает повтор исполнения сохранённого поручения. При повторе нужно передавать исходное тело и ключ. Таймаут не означает, что ledger не провёл деньги: повтор с тем же UUID платежа позволяет получить существующий результат.
 
-## 4. Модули репозитория
+Распределённой транзакции между payment и ledger нет. Защита от повторного проведения опирается на ключи и ограничения БД; это не гарантия exactly-once доставки.
 
-- `ledger-service` — денежное ядро (кошельки, операции, двойная запись, outbox+publisher)
-- `payment-service` — оркестратор платежей (клиентская идемпотентность, вызов ledger, маппинг статусов)
-- `statement-service` — read model выписки (Kafka consumer, API выписки)
-- `user_service` — регистрация пользователей и выдача JWT
-- `gateway-service` — маршрутизация публичного API и общая Swagger UI
-- `compose.yaml` — пять Java-приложений, nginx, Postgres, Kafka, kafka-init
-- `dockerfiles/` — Dockerfile и настройки Maven
-- `docs/` — документация (domain, api, events, этот файл)
+## События и выписка
 
----
+Ledger сохраняет событие `TRANSACTION_POSTED` в outbox вместе с проводками. Publisher с задержкой 1 секунду между проходами читает неотправленные строки, отправляет JSON в `ledger-transactions`, ожидает подтверждение и ставит `sent_at`.
 
-## 5. Доменные правила (инварианты)
+Если Kafka приняла сообщение, а отметка outbox не сохранилась, возможна повторная публикация. Statement проверяет `transactionId` и использует уникальное ограничение `(transaction_id, wallet_id)`.
 
-### Ledger (L-…)
-- L-01 Двойная запись: у каждой операции ровно две проводки (DEBIT source, CREDIT target) на одинаковую сумму; сумма со знаком = 0.
-- L-02 Баланс обычного кошелька не может стать отрицательным; SYSTEM-кошелек может уходить в минус (эмитент).
-- L-03 Идемпотентность операции по `idempotency_key` (UNIQUE): повтор возвращает существующую транзакцию, деньги не двигаются.
-- L-04 Блокировки кошельков `SELECT ... FOR UPDATE` в фиксированном порядке (сначала меньший UUID) — защита от deadlock.
-- DEPOSIT допустим только из SYSTEM; TRANSFER не допустим из SYSTEM.
+Успешное событие создаёт OUT для источника и IN для получателя. Для SYSTEM тоже сохраняется строка, но API фильтрует выписку по владельцу из JWT. Формат сообщения и обработка ошибок описаны в [events.md](events.md).
 
-### Payment (P-…)
-- P-01 Заголовок `Idempotency-Key` обязателен (иначе 400).
-- P-02 Повтор с тем же ключом и тем же payload возвращает сохраненный платеж (200), ledger не вызывается.
-- P-03 Терминальные статусы SUCCESS/REJECTED кэшируются; FAILED — нетерминальный, retry с тем же ключом безопасен.
-- P-04 Тот же ключ, другой payload → 409 IDEMPOTENCY_KEY_CONFLICT.
-- P-05 Маппинг результата ledger: 2xx→SUCCESS; 422/404→REJECTED(code); 409→409; 5xx/таймаут→FAILED(LEDGER_UNAVAILABLE).
-- P-06 Таймаут вызова ledger (~3 c): защита от «повисшего» ledger.
+Это разделение записи и чтения: ledger хранит актуальные балансы, statement — отдельную проекцию истории.
 
-### Два уровня идемпотентности (важно!)
-- payment: клиентский `Idempotency-Key` защищает переход клиент→payment (схлопывает retry клиента в один Payment).
-- ledger: ключ команды = `payment.id` защищает переход payment→ledger (схлопывает повторные вызовы одного Payment; гарантирует отсутствие double spend при retry после таймаута).
+## Аутентификация и доступ
 
----
+- Пароли хранятся через `DelegatingPasswordEncoder` с BCrypt по умолчанию.
+- User выдаёт access token RS256 на 15 минут.
+- Бизнес-сервисы проверяют подпись, issuer и срок действия JWT.
+- Владелец берётся из `sub` проверенного токена.
+- Чужой кошелёк или платёж возвращает 404; чужая выписка — пустой список.
+- Payment передаёт JWT пользователя в ledger, который повторно проверяет доступ.
+- Регистрация, вход, health endpoints и OpenAPI доступны без JWT.
 
-## 6. Схемы БД
+Ключи в репозитории и HTTP-конфигурация Compose предназначены для локальной демонстрации.
 
-### ledger (схема `ledger`)
-- `wallets(id, user_id, status, currency, balance, created_at, updated_at)`; SYSTEM = `00000000-0000-0000-0000-000000000000`
-- `ledger_transactions(id, type, status, amount, currency, source_wallet_id, target_wallet_id, external_ref, idempotency_key UNIQUE, created_at)`
-- `ledger_entries(id, transaction_id, wallet_id, direction DEBIT|CREDIT, amount, created_at)`
-- `outbox(id, event_type, payload, created_at, sent_at)` — sent_at NULL = не отправлено
+## Сборка и проверка
 
-### payment (схема `payment`)
-- `payments(id, idempotency_key UNIQUE, type, source_wallet_id, target_wallet_id, amount, currency, status NEW|PROCESSING|SUCCESS|REJECTED|FAILED, failure_reason, description, created_at, updated_at)`
+Java 21, Spring Boot 4.1.0, Spring Cloud 2025.1.4, springdoc 3.2.0. PostgreSQL 16, Kafka 4.3.1 и nginx 1.30.6 запускаются через Compose.
 
-### statement (схема `statement`)
-- `statement_entries(id, transaction_id, wallet_id, direction IN|OUT, amount, currency, counterparty_wallet_id, type, created_at)`; UNIQUE(transaction_id, wallet_id) — идемпотентность консьюмера
+Каждый Java-сервис имеет свой `pom.xml` и Maven Wrapper; корневого агрегирующего POM нет. Dockerfile собирает JAR в Maven/JDK-образе и запускает его в JRE-образе от пользователя `wallet`.
 
----
+Автоматизированные проверки включают загрузку контекстов, интеграционные фильтры выписки и пять HTTP-тестов gateway. Тесты gateway не требуют внешней инфраструктуры; тестам бизнес-сервисов нужны PostgreSQL, а ledger и statement также Kafka.
 
-## 7. API-контракты (кратко)
+Команды запуска, разработки из IDE и тестов — в [docker.md](docker.md).
 
-Формат ошибки везде: RFC 7807 ProblemDetail + поле `code`.
+## Границы реализации
 
-### ledger :8081
-- `POST /api/v1/wallets` → 201 (создание кошелька)
-- `GET /api/v1/wallets/{id}` → 200 / 404 WALLET_NOT_FOUND
-- `POST /internal/v1/operations` → 201 POSTED; идемпотентна по ключу; 422 INSUFFICIENT_FUNDS / WALLET_BLOCKED; 400 VALIDATION_ERROR
+- Модель рассчитана на RUB. При создании кошелька валюта проверяется; сравнение валют операции и кошельков в денежном сервисе отдельно не реализовано.
+- Сумма проверяется на положительность. Ограничения API на максимум и количество дробных знаков не заданы.
+- Для нетерминального платежа повтор исполняет сохранённые параметры без сравнения нового тела. После успешного повтора `FAILED` старый `failureReason` может сохраняться; результат определяет `status`.
+- Есть access token; refresh token, отзыв JWT, управление ролями и восстановление пароля не реализованы.
+- Publisher использует polling. Отдельных DLQ, очистки outbox и координации нескольких publisher-инстансов нет.
+- Выписка ограничивается `limit` без верхнего предела; страничной пагинации нет.
+- Финансовые сценарии проверяются вручную через Swagger; полного автоматизированного покрытия и изолированного Testcontainers-окружения нет.
+- Compose рассчитан на локальный запуск с одним PostgreSQL, Kafka broker и gateway.
 
-### payment :8082
-- `POST /api/v1/payments` + `Idempotency-Key` → 201 (создан) / 200 (повтор) / 409 (конфликт ключа); тело = платеж со статусом
-- `GET /api/v1/payments/{id}` → 200 / 404 PAYMENT_NOT_FOUND
+## Документы
 
-### statement :8083
-- `GET /api/v1/statement?walletId=&from=&to=&limit=` → 200, список записей выписки (свежие первыми)
+- [Доменная модель](domain.md)
+- [Бизнес-правила](rules.md)
+- [HTTP API](api.md)
+- [Kafka и outbox](events.md)
+- [Docker и разработка](docker.md)
 
-Коды ошибок: WALLET_NOT_FOUND, PAYMENT_NOT_FOUND, NOT_FOUND, VALIDATION_ERROR, INSUFFICIENT_FUNDS, WALLET_BLOCKED, IDEMPOTENCY_KEY_CONFLICT, INTERNAL_ERROR.
+## Соглашения разработки
 
----
-
-## 8. События и outbox
-
-- Топик: `ledger-transactions` (3 партиции). Ключ партиционирования = `transactionId`.
-- Событие `TRANSACTION_POSTED`, payload JSON:
-  `{transactionId, type, amount, currency, sourceWalletId, targetWalletId, createdAt}`
-- Публикация: outbox пишется в той же БД-транзакции, что и операция; relay (`OutboxPublisher`, `@Scheduled` 1 c) читает `sent_at IS NULL`, шлет в Kafka, ставит `sent_at`. Семантика at-least-once → консьюмеры идемпотентны.
-- Консьюмеры: `statement-service` (group `statement-service`), строит read model (2 строки на событие: OUT для source, IN для target).
-
----
-
-## 9. Что уже реализовано (Этапы 1–5)
-
-- **Этап 1:** документация и контракты (domain/api/events), правила L/P, диаграммы.
-- **Этап 2:** Docker Postgres + Flyway + схема ledger + JPA Wallet + ручки кошельков + ProblemDetail.
-- **Этап 3:** денежное ядро: двойная запись, блокировки FOR UPDATE + фикс. порядок, идемпотентность, статусы, `@RestControllerAdvice` с кодами.
-- **Этап 4:** payment-оркестратор: RestClient, синхронная команда в ledger, маппинг P-05, клиентская идемпотентность, статусы платежа.
-- **Этап 5:** Kafka + outbox + publisher; statement-service consumer + read model + API выписки; eventual consistency.
-
----
-
-## 10. Ключевые проектные решения (и почему)
-
-- Команды синхронные (REST), события асинхронные (Kafka): клиенту нужен результат сразу; асинхронные команды отложены.
-- Два уровня идемпотентности (см. §5) — защита от double spend на обоих переходах.
-- Outbox вместо прямой отправки в Kafka: атомарность «операция + событие» одной БД-транзакцией.
-- CQRS: ledger = нормализованная write model (корректность записи); statement = денормализованная read model (скорость чтения).
-- Нет FK между схемами: микросервисные границы; целостность кошельков проверяет ledger.
-- Слоистость: сервис возвращает доменные сущности, контроллер маппит DTO; сервис не зависит от web-DTO.
-- Централизованные ошибки: `@RestControllerAdvice` + ProblemDetail + `code`.
-
-### Известные особенности / заметки
-- На Spring Boot 4.1 автоконфигурация Kafka в этом окружении НЕ создала `KafkaTemplate`/`kafkaListenerContainerFactory`; поэтому в ledger и statement есть РУЧНЫЕ `KafkaConfig`-классы. НЕ удалять их.
-- Relay outbox — polling (1 c): известен trade-off (лаг, холостые тики); в бою заменяется на CDC/LISTEN-NOTIFY.
-
----
-
-## 11. Как запустить
-
-Из корня репозитория:
-
-```shell
-docker compose up --build -d --wait --wait-timeout 300
-docker compose ps -a
-```
-
-Сборка JAR выполняется внутри Docker. Внешний HTTP-вход: `http://localhost:8080`; общая Swagger UI: `/swagger-ui.html`. Порты Java-сервисов остаются внутри Docker. Kafka использует `kafka:9092` внутри Docker и `localhost:9092` с компьютера. Топик `ledger-transactions` (3 партиции, replication factor 1) создаёт одноразовый сервис `kafka-init`. PostgreSQL и Kafka сохраняют данные в named volumes. Остановка: `docker compose down` без `-v`. Подробнее: `docs/docker.md`. Поддерживается запуск приложений из IDE с контейнерной инфраструктурой.
-
----
-
-## 12. Итоговая дорожная карта
-
-Объём согласован 1 ноября 2026 года. Прежние планы Redis, MongoDB и уведомлений исключены.
-
-1. Docker: отдельные Dockerfile, корневой Compose, проверки готовности и kafka-init — реализовано.
-2. OpenAPI / Swagger UI — реализовано через springdoc 3.2.0, четыре контракта и общий UI.
-3. Spring Cloud Gateway (Spring Cloud 2025.1.4) и nginx 1.30.6 — реализован единый вход, внутренние операции не публикуются.
-4. gRPC для payment → ledger — отдельный рассматриваемый этап; Kafka остаётся каналом событий.
-5. Итоговая проверка основных сценариев и документация для портфолио.
-
----
-
-## 13. Соглашения по коду (для агентов)
-
-- Слоистость: controller → service → repository; сервис не импортирует web-DTO.
-- Ошибки: доменные исключения + `@RestControllerAdvice` → ProblemDetail с `code`.
-- Миграции Flyway иммутабельны: новые изменения — только новые файлы V2, V3…
-- Идемпотентность обязательна для денежных операций и консьюмеров.
-- Логи: бизнес-отказы WARN в сервисе (богатый контекст), технические сбои ERROR централизованно.
-- Коммиты: `feat: …`, `fix: …`, `docs: …` с кратким описанием.
+- Слои: controller → service → repository.
+- Миграции Flyway изменяются новыми файлами; уже применённые миграции сохраняются.
+- Денежные команды и обработка повторных событий сохраняют идемпотентность.
+- Ledger и statement используют явные `KafkaConfig` для producer / consumer.

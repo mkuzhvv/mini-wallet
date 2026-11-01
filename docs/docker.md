@@ -119,6 +119,32 @@ PostgreSQL использует `mini-wallet_pgdata`. Дополнительны
 подключения данных не требуются. Обычный `docker compose down` сохраняет оба тома,
 а `docker compose down -v` удаляет их вместе с данными.
 
+## Запуск Java-сервисов из IDE
+
+Нужен JDK 21. Сначала остановите контейнеры приложений и подготовьте инфраструктуру:
+
+```shell
+docker compose stop nginx gateway-service user-service ledger-service payment-service statement-service
+docker compose up -d postgres kafka kafka-init
+```
+
+После успешного завершения `kafka-init` запустите пять Spring Boot приложений
+из IDE. Либо выполните команды из корня проекта, каждую в отдельном терминале
+PowerShell; Maven Wrapper скачает Maven автоматически:
+
+```powershell
+.\user_service\mvnw.cmd -f user_service/pom.xml spring-boot:run
+.\ledger-service\mvnw.cmd -f ledger-service/pom.xml spring-boot:run
+.\payment-service\mvnw.cmd -f payment-service/pom.xml spring-boot:run
+.\statement_service\mvnw.cmd -f statement_service/pom.xml spring-boot:run
+.\gateway-service\mvnw.cmd -f gateway-service/pom.xml spring-boot:run
+```
+
+В Bash можно запустить `bash ./mvnw spring-boot:run` из каталога каждого сервиса.
+В этом режиме gateway доступен на `http://localhost:8085`, Swagger UI —
+на `http://localhost:8085/swagger-ui.html`. Gateway использует адреса
+`localhost:8081`–`localhost:8084`; nginx не участвует.
+
 ## Проверка приложения
 
 После готовности контейнеров используйте полный сценарий из README:
