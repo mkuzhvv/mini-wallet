@@ -12,9 +12,8 @@
 событийной архитектурой (Kafka + outbox) и CQRS (read model выписки).
 
 Цель проекта — освоить backend-разработку: Spring Boot, JPA/Postgres, Flyway,
-транзакции и блокировки, идемпотентность, HTTP-клиенты, Kafka, outbox, CQRS,
-а далее — security (JWT), Redis, MongoDB, gateway и load balancing.
-так же на проекте будут проектиковаться различные новые технологии - тем самым расширяя его функционал путес внедрения новых фич
+транзакции и блокировки, идемпотентность, HTTP-клиенты, Kafka, outbox и CQRS.
+JWT уже реализован. Итоговый объём: Docker Compose, OpenAPI, Spring Cloud Gateway, nginx и возможный gRPC для payment → ledger.
 
 ---
 
@@ -25,7 +24,7 @@
 - PostgreSQL 16 (Docker), Flyway (миграции, режим `validate`)
 - Apache Kafka (Docker, образ `apache/kafka`, KRaft, без Zookeeper)
 - Lombok, Jackson
-- Планируется: Spring Security + JWT, Redis, MongoDB, Spring Cloud Gateway, nginx, springdoc-openapi(также думаю в будущем сделать общение микросервисов по gRPC)
+- Реализовано: Spring Security / JWT, Dockerfile для четырёх сервисов, полный Compose, kafka-init. Далее: OpenAPI, Spring Cloud Gateway, nginx; gRPC рассматривается для payment → ledger.
 
 ---
 
@@ -52,7 +51,7 @@
 - **События** (ledger → Kafka → statement): асинхронные, через outbox.
 - Каждый сервис владеет своей схемой Postgres. **Между схемами НЕТ foreign keys.**
 
-Инфраструктура (Docker Compose, папка `docker/`):
+Инфраструктура и приложения описаны в корневом `compose.yaml`; Dockerfile и настройки Maven — в `dockerfiles/`:
 - `miniwallet-postgres` :5432, БД `miniwallet`, user/pass `wallet`/`wallet`
 - `miniwallet-kafka` :9092 (KRaft single-node)
 
@@ -63,7 +62,9 @@
 - `ledger-service` — денежное ядро (кошельки, операции, двойная запись, outbox+publisher)
 - `payment-service` — оркестратор платежей (клиентская идемпотентность, вызов ledger, маппинг статусов)
 - `statement-service` — read model выписки (Kafka consumer, API выписки)
-- `docker/` — docker-compose (postgres, kafka)
+- `user_service` — регистрация пользователей и выдача JWT
+- `compose.yaml` — четыре приложения, Postgres, Kafka, kafka-init
+- `dockerfiles/` — Dockerfile и настройки Maven
 - `docs/` — документация (domain, api, events, этот файл)
 
 ---
@@ -165,55 +166,26 @@
 
 ## 11. Как запустить
 
-```bash
-cd docker && docker compose up -d     # postgres + kafka
-# затем запустить ledger-service (8081), payment-service (8082), statement-service (8083)
+Из корня репозитория:
+
+```shell
+docker compose up --build -d --wait --wait-timeout 300
+docker compose ps -a
 ```
 
-Топик создается один раз:
-```bash
-docker exec -it miniwallet-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
-  --create --topic ledger-transactions --partitions 3 --replication-factor 1
-```
+Сборка JAR выполняется внутри Docker. Готовность приложений проверяется через `/actuator/health`. Kafka использует `kafka:9092` внутри Docker и `localhost:9092` с компьютера. Топик `ledger-transactions` (3 партиции, replication factor 1) создаёт одноразовый сервис `kafka-init`. PostgreSQL и Kafka сохраняют данные в named volumes. Остановка: `docker compose down` без `-v`. Подробнее: `docs/docker.md`. Поддерживается запуск приложений из IDE с контейнерной инфраструктурой.
 
 ---
 
-## 12. Дорожная карта (порядок выполнения)
+## 12. Итоговая дорожная карта
 
-Порядок: **Этап 7 → Этап 8 → Этап 6 → Этап 9 → Этап 10.**
+Объём согласован 1 ноября 2026 года. Прежние планы Redis, MongoDB и уведомлений исключены.
 
-### Этап 7 — Аутентификация и JWT
-Цель: пользователи, регистрация/логин, stateless-аутентификация, защита ручек.
-- Новый user/auth-сервис: регистрация (email+пароль, BCrypt), логин → JWT (access; опц. refresh); таблица пользователей в своей схеме.
-- SecurityFilterChain + JWT-фильтр: валидация токена, извлечение userId в SecurityContext.
-- Защита payment/wallet/statement: без токена 401; кошельки привязываются к userId из токена (вместо свободной строки).
-- Концепции: stateless auth, структура/подпись JWT, BCrypt, filter chain, роли.
-- Критерий: register/login выдают JWT; защищенная ручка без токена → 401, с токеном → 200; кошелек создается на пользователя из токена.
-
-### Этап 8 — Notification-сервис + Telegram + MongoDB
-Цель: уведомления о операциях в Telegram; хранение в MongoDB (документная модель).
-- Новый notification-service: Kafka-consumer топика `ledger-transactions` (своя группа).
-- На `TRANSACTION_POSTED`: найти chat_id пользователя (документ предпочтений в Mongo), отправить сообщение через Telegram Bot API (`sendMessage`), сохранить документ уведомления в Mongo; дедуп по transactionId.
-- MongoDB в Docker + spring-data-mongodb; документы NotificationDoc / UserPrefsDoc.
-- Концепции: интеграция внешнего API (BotFather, токен бота), документная модель, когда NoSQL уместен.
-- Критерий: после платежа пользователь получает сообщение в Telegram; уведомление есть в Mongo; повторы не дублируются.
-
-### Этап 6 — Rate limiter на Redis
-Цель: защита публичных ручек от злоупотреблений.
-- Redis в Docker; interceptor/filter на публичных эндпоинтах (login, POST payments) с окном/лимитом (sliding window или token bucket, можно Lua-скриптом).
-- Ключи per-user / per-IP; при превышении → 429 + Retry-After.
-- Концепции: Redis, алгоритмы rate limiting.
-- Критерий: N+1-й запрос в окне возвращает 429.
-
-### Этап 9 — API Gateway + nginx (load balancing)
-Цель: единая точка входа, маршрутизация, балансировка.
-- Spring Cloud Gateway: маршруты /api/v1/payments→payment, /api/v1/wallets→ledger, /api/v1/statement→statement, /auth→user-service.
-- nginx в Docker как reverse proxy/LB; демонстрация round-robin на 2 инстансах одного сервиса (statelessness).
-- Концепции: routing, cross-cutting concerns, LB, statelessness.
-- Критерий: весь трафик идет через gateway/nginx; LB распределяет между инстансами.
-
-### Этап 10 — Полировка
-- Тесты (unit + integration, Testcontainers), springdoc-openapi (Swagger), полный docker-compose всех сервисов, README, опц. мониторинг (actuator/Prometheus).
+1. Docker: отдельные Dockerfile, корневой Compose, проверки готовности и kafka-init — реализовано.
+2. OpenAPI / Swagger UI — описание и демонстрация публичного HTTP API.
+3. Spring Cloud Gateway и nginx — единый внешний вход с разделением обязанностей.
+4. gRPC для payment → ledger — отдельный рассматриваемый этап; Kafka остаётся каналом событий.
+5. Итоговая проверка основных сценариев и документация для портфолио.
 
 ---
 

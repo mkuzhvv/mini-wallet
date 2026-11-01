@@ -107,18 +107,19 @@ flowchart LR
 | Межсервисные команды | Spring `RestClient` с connect/read timeouts |
 | События | Apache Kafka, Spring for Apache Kafka, transactional outbox |
 | Служебные инструменты | Spring Boot Actuator, Lombok, Jackson |
-| Локальная инфраструктура | Docker Compose: PostgreSQL и Kafka в режиме KRaft |
-| Тестирование | JUnit, `@SpringBootTest`; сейчас — проверки загрузки контекста |
+| Локальная инфраструктура | Docker Compose: четыре Java-сервиса, PostgreSQL, Kafka KRaft, kafka-init |
+| Тестирование | JUnit, `@SpringBootTest`: загрузка контекста и интеграционная проверка фильтров выписки |
 
-Версия Spring Boot указана по `pom.xml`. В Compose Kafka использует образ `apache/kafka:latest`, поэтому его версия не зафиксирована.
+Версия Spring Boot указана по `pom.xml`. В Compose версия Kafka зафиксирована: `apache/kafka:4.3.1`.
 
 ## Структура репозитория
 
 ```text
 mini-wallet/
 ├── README.md
-├── docker/
-│   └── docker-compose.yaml       # PostgreSQL + Kafka
+├── compose.yaml                 # всё приложение и инфраструктура
+├── .dockerignore
+├── dockerfiles/                 # четыре Dockerfile и настройки Maven
 ├── docs/
 │   ├── PROJECT.md               # проектные решения и план развития
 │   ├── domain.md                # доменная модель
@@ -140,51 +141,57 @@ mini-wallet/
 
 ## Локальный запуск
 
-### Требования
+### Всё приложение одной командой
 
-- JDK 21 с настроенным `JAVA_HOME`.
-- Docker Engine / Docker Desktop с Docker Compose.
-- Maven либо Maven Wrapper из каталога нужного сервиса. Wrapper настроен на Maven `3.9.16` и при первом запуске скачивает дистрибутив.
-- Свободные порты `5432`, `9092`, `8081`–`8084`.
-- Для примера на Bash ниже — `curl` и `jq`; вариант PowerShell использует встроенные HTTP-команды.
+Нужен Docker Engine с Compose (например, Docker Desktop с Linux containers). Порты `5432`, `9092`, `8081`–`8084` должны быть свободны. Java и Maven на компьютере для этого варианта не требуются.
 
-Все команды этого раздела, кроме явно указанных переходов `cd`, выполняются **из корня репозитория**. Сервисы запускаются на хосте; Compose поднимает только инфраструктуру.
-
-### 1. Поднять PostgreSQL и Kafka
+Из корня репозитория:
 
 ```shell
-docker compose -f docker/docker-compose.yaml up -d
-docker compose -f docker/docker-compose.yaml ps
+docker compose up --build -d --wait --wait-timeout 300
+docker compose ps -a
 ```
 
-| Компонент | Локальный адрес / значение |
+Compose собирает четыре Java-приложения из исходников, запускает PostgreSQL и Kafka, ожидает их готовности и автоматически создаёт `ledger-transactions` (3 партиции, replication factor 1). Завершение `kafka-init` с кодом `0` означает успешную подготовку топика.
+
+| Компонент | Адрес с компьютера |
 | --- | --- |
-| PostgreSQL | `localhost:5432` |
-| База данных | `miniwallet` |
-| Пользователь / пароль БД | `wallet` / `wallet` |
-| Kafka bootstrap server | `localhost:9092` |
-| Контейнер PostgreSQL | `miniwallet-postgres` |
-| Контейнер Kafka | `miniwallet-kafka` |
+| User / auth | `http://localhost:8084` |
+| Ledger / wallets | `http://localhost:8081` |
+| Payment | `http://localhost:8082` |
+| Statement | `http://localhost:8083` |
+| PostgreSQL | `localhost:5432`, БД `miniwallet`, пользователь / пароль `wallet` / `wallet` |
+| Kafka | `localhost:9092` |
 
-Дождитесь состояния `healthy` у PostgreSQL и готовности Kafka принимать подключения. Логи инфраструктуры:
+У каждого приложения доступен `GET /actuator/health`. Первый запуск скачивает базовые образы и зависимости; повторные сборки используют кэш Maven.
 
-```shell
-docker compose -f docker/docker-compose.yaml logs -f postgres kafka
-```
-
-### 2. Создать топик
-
-Команда работает и при повторном запуске:
+Логи и остановка:
 
 ```shell
-docker exec miniwallet-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic ledger-transactions --partitions 3 --replication-factor 1
+docker compose logs -f ledger-service payment-service statement-service
+docker compose stop
+docker compose down
 ```
 
-Здесь явно задаются три партиции. Объявления топика через Spring `NewTopic` в проекте нет; `--if-not-exists` не изменяет число партиций уже существующего топика.
+`down` сохраняет данные PostgreSQL и Kafka в named volumes. Опция `down -v` удаляет управляемые Compose тома с данными; для обычной остановки она не нужна.
 
-### 3. Запустить четыре приложения
+PostgreSQL и Kafka используют стандартные тома проекта; дополнительных Compose-файлов для запуска не требуется. Сеть, Dockerfile, создание топика и хранение данных описаны в [docs/docker.md](docs/docker.md).
 
-При установленном Maven выполните **каждую команду в отдельном терминале**:
+### Запуск приложений из IDE
+
+Для разработки можно поднять только инфраструктуру и топик:
+
+```shell
+docker compose up -d postgres kafka kafka-init
+```
+
+После успешного завершения `kafka-init` запускайте приложения из IDE с JDK 21 или через Maven Wrapper. Если весь стек уже работал, сначала освободите порты:
+
+```shell
+docker compose stop user-service ledger-service payment-service statement-service
+```
+
+При установленном Maven каждая команда выполняется в отдельном терминале:
 
 ```shell
 mvn -f user_service/pom.xml spring-boot:run
@@ -193,50 +200,7 @@ mvn -f payment-service/pom.xml spring-boot:run
 mvn -f statement_service/pom.xml spring-boot:run
 ```
 
-Рекомендуемый порядок: user → ledger → payment → statement. Для обработки платежей ledger должен быть доступен, а для обновления выписок нужны Kafka и statement.
-
-Без глобального Maven используйте Wrapper. Например, для `user_service`:
-
-**Windows / PowerShell:**
-
-```powershell
-cd user_service
-.\mvnw.cmd spring-boot:run
-```
-
-**Linux / macOS / Bash:**
-
-```bash
-cd user_service
-./mvnw spring-boot:run
-```
-
-Аналогично запустите Wrapper в остальных трёх каталогах, каждый в своём терминале. Альтернатива — запуск классов `UserServiceApplication`, `LedgerServiceApplication`, `PaymentServiceApplication` и `StatementServiceApplication` из IDE с JDK 21.
-
-При старте Flyway создаёт схемы и применяет миграции, а Hibernate проверяет соответствие сущностей структуре БД. Миграция ledger также создаёт системный кошелёк.
-
-### 4. Проверить готовность
-
-У каждого приложения есть публичный `GET /actuator/health`:
-
-```shell
-curl http://localhost:8084/actuator/health
-curl http://localhost:8081/actuator/health
-curl http://localhost:8082/actuator/health
-curl http://localhost:8083/actuator/health
-```
-
-В Windows PowerShell для этих команд можно использовать `curl.exe` либо `Invoke-RestMethod`. Нормальный ответ health endpoint содержит `"status": "UP"`.
-
-### Остановка
-
-Приложения, запущенные в терминалах, остановите через `Ctrl+C`, затем остановите инфраструктуру:
-
-```shell
-docker compose -f docker/docker-compose.yaml down
-```
-
-Данные PostgreSQL сохраняются в named volume `pgdata`. Kafka volume в текущем Compose не настроен: после пересоздания контейнера история брокера не гарантируется. Для полного сброса PostgreSQL потребуется удалить и его volume; это удалит пользователей, кошельки, платежи и выписки.
+Либо используйте `./mvnw spring-boot:run` на Linux / macOS и `.\mvnw.cmd spring-boot:run` на Windows из каталога сервиса. `application.yaml` сохраняет адреса `localhost`; Compose переопределяет их для контейнерной сети.
 
 ## Регистрация, аутентификация и авторизация
 
@@ -724,7 +688,7 @@ mvn -f statement_service/pom.xml clean verify
 
 Либо в каталоге каждого сервиса используйте `./mvnw clean verify` на Bash и `.\mvnw.cmd clean verify` на Windows. Команда собирает JAR и запускает тесты.
 
-Сейчас в каждом сервисе есть `@SpringBootTest` с `contextLoads()`. Они используют конфигурацию приложения: заранее запустите PostgreSQL, а для ledger / statement также Kafka и топик. Отдельного тестового профиля с изолированной БД или Testcontainers пока нет.
+В каждом сервисе есть `@SpringBootTest` с `contextLoads()`. В statement также есть интеграционная проверка необязательных границ дат, сортировки, лимита и изоляции записей по владельцу и кошельку. Тесты используют конфигурацию приложения: заранее запустите PostgreSQL, а для ledger / statement также Kafka и топик. Данные интеграционного теста выписки откатываются после проверки. Отдельного тестового профиля с изолированной БД или Testcontainers пока нет.
 
 Для упаковки без запуска тестов замените goal на `-DskipTests package`. Артефакты появляются в `target/` соответствующего сервиса. Сборка с пропущенными тестами не проверяет бизнес-сценарии.
 
@@ -756,8 +720,8 @@ mvn -f statement_service/pom.xml clean verify
 Полезные команды из корня репозитория:
 
 ```shell
-docker compose -f docker/docker-compose.yaml ps
-docker compose -f docker/docker-compose.yaml logs --tail=100 postgres kafka
+docker compose ps
+docker compose logs --tail=100 postgres kafka
 docker exec miniwallet-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic ledger-transactions
 docker exec miniwallet-kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group statement-service
 docker exec miniwallet-postgres psql -U wallet -d miniwallet -c "SELECT count(*) AS pending_events FROM ledger.outbox WHERE sent_at IS NULL;"
@@ -773,20 +737,17 @@ docker exec miniwallet-postgres psql -U wallet -d miniwallet -c "SELECT count(*)
 - При успешном повторе ранее `FAILED`-платежа `failureReason` сейчас не очищается. Основной признак результата — `status`.
 - Outbox реализован через polling для текущей локальной схемы запуска. Координация нескольких publisher-инстансов, очистка outbox и отдельная DLQ ещё не настроены.
 - `limit` выписки не имеет заданного верхнего предела; страничной / курсорной пагинации нет.
-- Автоматизированные тесты пока проверяют загрузку контекста; полноценного покрытия финансовых сценариев нет.
-- Compose запускает только PostgreSQL и Kafka. Redis, MongoDB, gateway, уведомления и контейнеризация всех Java-приложений пока не добавлены.
+- Автоматизированные тесты проверяют загрузку контекста и фильтры выписки; полноценного покрытия финансовых сценариев нет.
+- Compose предназначен для локальной демонстрации: один PostgreSQL и один Kafka broker. Gateway и nginx будут добавлены следующим этапом.
 
 ## Дальнейшее развитие
 
-- Расширить security: refresh tokens, управление сессиями / отзывом, роли и административные сценарии.
-- Добавить уведомления через отдельный Kafka consumer, Telegram и MongoDB для хранения настроек и истории доставки.
-- Реализовать rate limiting на Redis для входа и публичных API.
-- Добавить API Gateway, reverse proxy и демонстрацию нескольких экземпляров сервисов.
-- Опубликовать OpenAPI / Swagger-контракты.
-- Покрыть денежные операции, разграничение доступа, конкурентные повторы и восстановление после сбоев тестами с Testcontainers.
-- Усилить валидацию валюты и сумм, обработку повторов и диагностику ошибок.
-- Доработать жизненный цикл событий: DLQ, наблюдаемость, версионирование контрактов и эксплуатацию outbox.
-- Подготовить воспроизводимый Docker Compose для всех приложений и расширить метрики / трассировку.
+Объём финальной версии ограничен следующими этапами:
+
+- OpenAPI / Swagger UI для демонстрации HTTP API.
+- Spring Cloud Gateway и nginx как единый внешний вход.
+- Возможный gRPC для существующего вызова payment → ledger с сохранением внешнего HTTP API и событий Kafka.
+- Итоговая проверка денежных сценариев и документация для портфолио.
 
 ## Дополнительная документация
 
@@ -795,6 +756,7 @@ README описывает **текущее поведение реализаци
 | Документ | Содержание |
 | --- | --- |
 | [docs/PROJECT.md](docs/PROJECT.md) | Контекст проекта, архитектурные решения и этапы развития |
+| [docs/docker.md](docs/docker.md) | Dockerfile, Compose, сеть, топик и хранение данных |
 | [docs/domain.md](docs/domain.md) | Доменные сущности и границы ответственности |
 | [docs/rules.md](docs/rules.md) | Проектные бизнес-правила и инварианты |
 | [docs/api.md](docs/api.md) | Исходное описание HTTP API |
