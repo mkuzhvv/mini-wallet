@@ -24,27 +24,16 @@ JWT уже реализован. Итоговый объём: Docker Compose, Op
 - PostgreSQL 16 (Docker), Flyway (миграции, режим `validate`)
 - Apache Kafka (Docker, образ `apache/kafka`, KRaft, без Zookeeper)
 - Lombok, Jackson
-- Реализовано: Spring Security / JWT, Dockerfile для четырёх сервисов, полный Compose, kafka-init. Далее: OpenAPI, Spring Cloud Gateway, nginx; gRPC рассматривается для payment → ledger.
+- Реализовано: Spring Security / JWT, Dockerfile для пяти Java-сервисов, полный Compose, kafka-init, OpenAPI / общая Swagger UI, Spring Cloud Gateway и nginx. gRPC рассматривается для payment → ledger.
 
 ---
 
 ## 3. Архитектура: сервисы и связи
 
-```
-                        ┌──────────┐
-                        │  CLIENT  │
-                        └────┬─────┘
-   POST /api/v1/payments │   │ GET /api/v1/wallets   │ GET /api/v1/statement
-                         v   v                       v
-                  ┌───────────┐   ┌───────────┐  ┌──────────────┐
-                  │ payment   │   │ ledger    │  │ statement    │
-                  │ :8082     │   │ :8081     │  │ :8083        │
-                  └─────┬─────┘   └─────┬─────┘  └──────▲───────┘
-                        │ REST (команда, синхронно)      │
-                        └──────────────>│               │
-                                        │ outbox → Kafka (topic: ledger-transactions)
-                                        └───────────────────────────────┘
-                  [payment]        [ledger]         [statement]   ← свои схемы Postgres
+```text
+Клиент → nginx :8080 → gateway :8085 → user / ledger / payment / statement
+payment → REST + JWT → ledger → outbox → Kafka → statement
+Каждый бизнес-сервис работает со своей схемой PostgreSQL.
 ```
 
 - **Команды** (payment → ledger): синхронный REST `POST /internal/v1/operations`.
@@ -63,7 +52,8 @@ JWT уже реализован. Итоговый объём: Docker Compose, Op
 - `payment-service` — оркестратор платежей (клиентская идемпотентность, вызов ledger, маппинг статусов)
 - `statement-service` — read model выписки (Kafka consumer, API выписки)
 - `user_service` — регистрация пользователей и выдача JWT
-- `compose.yaml` — четыре приложения, Postgres, Kafka, kafka-init
+- `gateway-service` — маршрутизация публичного API и общая Swagger UI
+- `compose.yaml` — пять Java-приложений, nginx, Postgres, Kafka, kafka-init
 - `dockerfiles/` — Dockerfile и настройки Maven
 - `docs/` — документация (domain, api, events, этот файл)
 
@@ -173,7 +163,7 @@ docker compose up --build -d --wait --wait-timeout 300
 docker compose ps -a
 ```
 
-Сборка JAR выполняется внутри Docker. Готовность приложений проверяется через `/actuator/health`. Kafka использует `kafka:9092` внутри Docker и `localhost:9092` с компьютера. Топик `ledger-transactions` (3 партиции, replication factor 1) создаёт одноразовый сервис `kafka-init`. PostgreSQL и Kafka сохраняют данные в named volumes. Остановка: `docker compose down` без `-v`. Подробнее: `docs/docker.md`. Поддерживается запуск приложений из IDE с контейнерной инфраструктурой.
+Сборка JAR выполняется внутри Docker. Внешний HTTP-вход: `http://localhost:8080`; общая Swagger UI: `/swagger-ui.html`. Порты Java-сервисов остаются внутри Docker. Kafka использует `kafka:9092` внутри Docker и `localhost:9092` с компьютера. Топик `ledger-transactions` (3 партиции, replication factor 1) создаёт одноразовый сервис `kafka-init`. PostgreSQL и Kafka сохраняют данные в named volumes. Остановка: `docker compose down` без `-v`. Подробнее: `docs/docker.md`. Поддерживается запуск приложений из IDE с контейнерной инфраструктурой.
 
 ---
 
@@ -182,8 +172,8 @@ docker compose ps -a
 Объём согласован 1 ноября 2026 года. Прежние планы Redis, MongoDB и уведомлений исключены.
 
 1. Docker: отдельные Dockerfile, корневой Compose, проверки готовности и kafka-init — реализовано.
-2. OpenAPI / Swagger UI — описание и демонстрация публичного HTTP API.
-3. Spring Cloud Gateway и nginx — единый внешний вход с разделением обязанностей.
+2. OpenAPI / Swagger UI — реализовано через springdoc 3.2.0, четыре контракта и общий UI.
+3. Spring Cloud Gateway (Spring Cloud 2025.1.4) и nginx 1.30.6 — реализован единый вход, внутренние операции не публикуются.
 4. gRPC для payment → ledger — отдельный рассматриваемый этап; Kafka остаётся каналом событий.
 5. Итоговая проверка основных сценариев и документация для портфолио.
 

@@ -34,3 +34,7 @@ app:
   jwt:
     issuer: mini-wallet-user-service
     public-key: classpath:keys/jwt-public.pem
+
+springdoc:
+  paths-to-match: /api/v1/**
+  override-with-generic-response: false

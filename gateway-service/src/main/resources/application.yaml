@@ -1,0 +1,75 @@
+server:
+  port: 8085
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: gateway-service
+  mvc:
+    problemdetails:
+      enabled: true
+  http:
+    clients:
+      connect-timeout: 2s
+      read-timeout: 10s
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: user-api
+              uri: ${USER_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/users/**
+            - id: wallet-api
+              uri: ${LEDGER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/wallets/**
+            - id: payment-api
+              uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/payments/**
+            - id: statement-api
+              uri: ${STATEMENT_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/v1/statement
+            - id: user-openapi
+              uri: ${USER_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/openapi/user
+              filters:
+                - SetPath=/v3/api-docs
+            - id: ledger-openapi
+              uri: ${LEDGER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/openapi/ledger
+              filters:
+                - SetPath=/v3/api-docs
+            - id: payment-openapi
+              uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/openapi/payment
+              filters:
+                - SetPath=/v3/api-docs
+            - id: statement-openapi
+              uri: ${STATEMENT_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/openapi/statement
+              filters:
+                - SetPath=/v3/api-docs
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    persist-authorization: true
+    urls-primary-name: User
+    urls:
+      - name: User
+        url: /openapi/user
+      - name: Ledger
+        url: /openapi/ledger
+      - name: Payment
+        url: /openapi/payment
+      - name: Statement
+        url: /openapi/statement

@@ -4,7 +4,7 @@
 
 Это учебный пет-проект для практики backend-разработки на задачах платёжной системы: от регистрации и разграничения доступа до двойной записи, конкурентных денежных операций, идемпотентности, transactional outbox и CQRS.
 
-Проект состоит из **четырёх самостоятельных сервисов**. `user_service` отвечает за учётные записи и выдачу токенов, `ledger-service` — за деньги, `payment-service` — за платёжные поручения, `statement_service` — за выписки.
+Проект состоит из **четырёх бизнес-сервисов и API Gateway**. `user_service` отвечает за учётные записи и выдачу токенов, `ledger-service` — за деньги, `payment-service` — за платёжные поручения, `statement_service` — за выписки. Gateway маршрутизирует публичный API и предоставляет Swagger UI; nginx принимает HTTP на порту 8080.
 
 ## Содержание
 
@@ -44,40 +44,32 @@
 
 ### Сервисы и границы ответственности
 
-| Сервис / каталог | Порт | Схема PostgreSQL | Ответственность |
+| Сервис / каталог | Внутренний порт | Схема PostgreSQL | Ответственность |
 | --- | --- | --- | --- |
 | `user_service` | `8084` | `user_service` | Регистрация, проверка email и пароля, выдача JWT, данные текущего пользователя из токена |
 | `ledger-service` | `8081` | `ledger` | Кошельки, балансы, денежные операции, проводки, outbox |
 | `payment-service` | `8082` | `payment` | Приём платёжных поручений, клиентская идемпотентность, синхронный вызов ledger, статусы платежей |
 | `statement_service` | `8083` | `statement` | Kafka consumer, read model истории операций, API выписки |
 
+Gateway работает на внутреннем порту 8085 без собственной БД. Единственный внешний HTTP-вход — nginx на localhost:8080.
+
 Названия каталогов приведены точно: `user_service` и `statement_service` используют подчёркивание.
 
 ```mermaid
 flowchart LR
-    Client[Клиент]
-    User["user_service :8084"]
-    Payment["payment-service :8082"]
-    Ledger["ledger-service :8081"]
-    Statement["statement_service :8083"]
-    Kafka["Kafka: ledger-transactions"]
-    UserDB[(user_service.users)]
-    PaymentDB[(payment.payments)]
-    LedgerDB[(ledger: кошельки, проводки, outbox)]
-    StatementDB[(statement.statement_entries)]
-
-    Client -->|Регистрация / вход| User
-    User -->|JWT access token| Client
-    Client -->|Bearer JWT: платежи| Payment
-    Client -->|Bearer JWT: кошельки / баланс| Ledger
-    Client -->|Bearer JWT: выписка| Statement
-    Payment -->|REST-команда + JWT клиента| Ledger
-    User --- UserDB
-    Payment --- PaymentDB
-    Ledger --- LedgerDB
-    Ledger -->|Outbox publisher| Kafka
-    Kafka -->|События проведённых операций| Statement
-    Statement --- StatementDB
+    Client[Клиент / Swagger UI] --> Nginx["nginx :8080 → :80"]
+    Nginx --> Gateway["gateway-service :8085"]
+    Gateway --> User["user_service :8084"]
+    Gateway --> Payment["payment-service :8082"]
+    Gateway --> Ledger["ledger-service :8081"]
+    Gateway --> Statement["statement_service :8083"]
+    Payment -->|REST + JWT клиента| Ledger
+    User --> UserDB[(user_service)]
+    Payment --> PaymentDB[(payment)]
+    Ledger --> LedgerDB[(ledger: кошельки, проводки, outbox)]
+    Ledger -->|Outbox publisher| Kafka["Kafka: ledger-transactions"]
+    Kafka -->|События операций| Statement
+    Statement --> StatementDB[(statement)]
 ```
 
 В локальной конфигурации сервисы используют **одну БД `miniwallet` с четырьмя отдельными схемами**. Каждый сервис работает со своими таблицами и миграциями; внешних ключей между схемами нет. `userId` передаётся между сервисами как идентификатор, а не как межсервисная связь JPA.
@@ -107,8 +99,10 @@ flowchart LR
 | Межсервисные команды | Spring `RestClient` с connect/read timeouts |
 | События | Apache Kafka, Spring for Apache Kafka, transactional outbox |
 | Служебные инструменты | Spring Boot Actuator, Lombok, Jackson |
-| Локальная инфраструктура | Docker Compose: четыре Java-сервиса, PostgreSQL, Kafka KRaft, kafka-init |
-| Тестирование | JUnit, `@SpringBootTest`: загрузка контекста и интеграционная проверка фильтров выписки |
+| Документация API | OpenAPI 3, springdoc 3.2.0, общая Swagger UI |
+| Вход API | nginx 1.30.6 → Spring Cloud Gateway Server Web MVC, Spring Cloud 2025.1.4 |
+| Локальная инфраструктура | Docker Compose: пять Java-сервисов, nginx, PostgreSQL, Kafka KRaft, kafka-init |
+| Тестирование | JUnit, `@SpringBootTest`: контексты, фильтры выписки, HTTP-маршруты и заголовки gateway |
 
 Версия Spring Boot указана по `pom.xml`. В Compose версия Kafka зафиксирована: `apache/kafka:4.3.1`.
 
@@ -119,7 +113,7 @@ mini-wallet/
 ├── README.md
 ├── compose.yaml                 # всё приложение и инфраструктура
 ├── .dockerignore
-├── dockerfiles/                 # четыре Dockerfile и настройки Maven
+├── dockerfiles/                 # пять Dockerfile, настройки Maven и nginx
 ├── docs/
 │   ├── PROJECT.md               # проектные решения и план развития
 │   ├── domain.md                # доменная модель
@@ -133,6 +127,7 @@ mini-wallet/
 │       ├── java/.../            # config, entity, repository, security, service, web
 │       └── resources/           # application.yaml, keys, db/migration
 ├── ledger-service/              # кошельки, ledger, outbox publisher
+├── gateway-service/             # маршрутизация API и общая Swagger UI
 ├── payment-service/             # платежи и REST-клиент ledger
 └── statement_service/           # Kafka consumer и выписки
 ```
@@ -143,7 +138,7 @@ mini-wallet/
 
 ### Всё приложение одной командой
 
-Нужен Docker Engine с Compose (например, Docker Desktop с Linux containers). Порты `5432`, `9092`, `8081`–`8084` должны быть свободны. Java и Maven на компьютере для этого варианта не требуются.
+Нужен Docker Engine с Compose (например, Docker Desktop с Linux containers). Порты `8080`, `5432` и `9092` должны быть свободны. Java и Maven на компьютере для контейнерного запуска не требуются.
 
 Из корня репозитория:
 
@@ -152,61 +147,68 @@ docker compose up --build -d --wait --wait-timeout 300
 docker compose ps -a
 ```
 
-Compose собирает четыре Java-приложения из исходников, запускает PostgreSQL и Kafka, ожидает их готовности и автоматически создаёт `ledger-transactions` (3 партиции, replication factor 1). Завершение `kafka-init` с кодом `0` означает успешную подготовку топика.
+Compose собирает пять Java-приложений, запускает PostgreSQL, Kafka, gateway и nginx. Топик `ledger-transactions` (3 партиции, replication factor 1) автоматически создаёт `kafka-init`; его `Exited (0)` означает успешную подготовку.
 
-| Компонент | Адрес с компьютера |
+| Назначение | Адрес |
 | --- | --- |
-| User / auth | `http://localhost:8084` |
-| Ledger / wallets | `http://localhost:8081` |
-| Payment | `http://localhost:8082` |
-| Statement | `http://localhost:8083` |
-| PostgreSQL | `localhost:5432`, БД `miniwallet`, пользователь / пароль `wallet` / `wallet` |
-| Kafka | `localhost:9092` |
+| Общая Swagger UI | [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) |
+| Вход в приложение | [http://localhost:8080](http://localhost:8080) — перенаправляет на Swagger UI |
+| Регистрация / вход | `http://localhost:8080/api/v1/auth/...` |
+| Кошельки | `http://localhost:8080/api/v1/wallets` |
+| Платежи | `http://localhost:8080/api/v1/payments` |
+| Выписка | `http://localhost:8080/api/v1/statement` |
+| Готовность gateway через nginx | `http://localhost:8080/actuator/health` |
+| PostgreSQL для локальных инструментов | `localhost:5432`, БД `miniwallet`, пользователь / пароль `wallet` / `wallet` |
+| Kafka для запуска из IDE | `localhost:9092` |
 
-У каждого приложения доступен `GET /actuator/health`. Первый запуск скачивает базовые образы и зависимости; повторные сборки используют кэш Maven.
+HTTP-порты приложений `8081`–`8085` остаются внутри Docker-сети. Клиент обращается к nginx, gateway выбирает сервис, а сам сервис проверяет JWT и права владельца. `/internal/v1/operations` через gateway не маршрутизируется.
+
+### Демонстрация через Swagger UI
+
+1. Выберите `User`, выполните register и login.
+2. Скопируйте `accessToken`, нажмите **Authorize** и вставьте токен без префикса `Bearer`.
+3. Выберите `Ledger`, создайте кошелёк и сохраните его `id`.
+4. Выберите `Payment`: в примере «Пополнение» замените `targetWalletId` на свой UUID и задайте `Idempotency-Key`. Для перевода используйте второй пример.
+5. Выберите `Statement` и запросите выписку с UUID кошелька. Проекция может появиться с небольшой задержкой после платежа.
+
+Swagger UI сохраняет введённый JWT локально в браузере для переключения контрактов. Очистить его можно через Authorize → Remove authorization. Swagger UI отправляет реальные запросы в локальный кошелёк. Описания четырёх API доступны без JWT по `/openapi/user`, `/openapi/ledger`, `/openapi/payment`, `/openapi/statement`. В контрактах настроен относительный сервер `/`, поэтому запросы идут через тот же внешний адрес.
 
 Логи и остановка:
 
 ```shell
-docker compose logs -f ledger-service payment-service statement-service
+docker compose logs -f nginx gateway-service payment-service ledger-service statement-service
 docker compose stop
 docker compose down
 ```
 
-`down` сохраняет данные PostgreSQL и Kafka в named volumes. Опция `down -v` удаляет управляемые Compose тома с данными; для обычной остановки она не нужна.
-
-PostgreSQL и Kafka используют стандартные тома проекта; дополнительных Compose-файлов для запуска не требуется. Сеть, Dockerfile, создание топика и хранение данных описаны в [docs/docker.md](docs/docker.md).
+`down` сохраняет PostgreSQL и Kafka в томах `mini-wallet_pgdata` и `mini-wallet_kafkadata`. `down -v` удаляет тома с данными. Дополнительных Compose-файлов для запуска не требуется. Подробнее: [docs/docker.md](docs/docker.md) и [docs/api.md](docs/api.md).
 
 ### Запуск приложений из IDE
 
 Для разработки можно поднять только инфраструктуру и топик:
 
 ```shell
+docker compose stop nginx gateway-service user-service ledger-service payment-service statement-service
 docker compose up -d postgres kafka kafka-init
 ```
 
-После успешного завершения `kafka-init` запускайте приложения из IDE с JDK 21 или через Maven Wrapper. Если весь стек уже работал, сначала освободите порты:
-
-```shell
-docker compose stop user-service ledger-service payment-service statement-service
-```
-
-При установленном Maven каждая команда выполняется в отдельном терминале:
+После завершения `kafka-init` запускайте пять Java-приложений с JDK 21. При установленном Maven — каждую команду в отдельном терминале:
 
 ```shell
 mvn -f user_service/pom.xml spring-boot:run
 mvn -f ledger-service/pom.xml spring-boot:run
 mvn -f payment-service/pom.xml spring-boot:run
 mvn -f statement_service/pom.xml spring-boot:run
+mvn -f gateway-service/pom.xml spring-boot:run
 ```
 
-Либо используйте `./mvnw spring-boot:run` на Linux / macOS и `.\mvnw.cmd spring-boot:run` на Windows из каталога сервиса. `application.yaml` сохраняет адреса `localhost`; Compose переопределяет их для контейнерной сети.
+Либо используйте Maven Wrapper соответствующего сервиса. В этом режиме gateway доступен на `http://localhost:8085`, Swagger UI — на `http://localhost:8085/swagger-ui.html`; nginx не участвует. Настройки gateway по умолчанию указывают на сервисы на `localhost:8081`–`localhost:8084`, Compose переопределяет их для Docker-сети.
 
 ## Регистрация, аутентификация и авторизация
 
 ### Регистрация
 
-`POST http://localhost:8084/api/v1/auth/register` доступен без токена.
+`POST http://localhost:8080/api/v1/auth/register` доступен без токена.
 
 ```json
 {
@@ -239,7 +241,7 @@ mvn -f statement_service/pom.xml spring-boot:run
 
 ### Вход и access token
 
-`POST http://localhost:8084/api/v1/auth/login` принимает те же поля `email` и `password`. Spring Security проверяет пароль через `AuthenticationManager` / `DaoAuthenticationProvider`. Пользователь со статусом `BLOCKED` не может войти.
+`POST http://localhost:8080/api/v1/auth/login` принимает те же поля `email` и `password`. Spring Security проверяет пароль через `AuthenticationManager` / `DaoAuthenticationProvider`. Пользователь со статусом `BLOCKED` не может войти.
 
 Успешный ответ — `200 OK`:
 
@@ -272,7 +274,7 @@ mvn -f statement_service/pom.xml spring-boot:run
 Authorization: Bearer <accessToken>
 ```
 
-Все приложения работают без HTTP-сессии (`STATELESS`). Без токена доступны регистрация, вход и `/actuator/health`; остальные маршруты требуют аутентификации, включая `/internal/v1/operations`.
+Все бизнес-сервисы работают без HTTP-сессии (`STATELESS`). Без токена доступны регистрация, вход и `/actuator/health`; публичная документация также открыта; бизнес-маршруты требуют аутентификации, включая `/internal/v1/operations`.
 
 | Действие | Проверка доступа |
 | --- | --- |
@@ -468,25 +470,25 @@ GET /api/v1/statement?walletId=<UUID>&from=2026-10-01T00:00:00Z&to=2026-10-31T23
 
 ```bash
 # 1. Регистрация.
-curl -fsS http://localhost:8084/api/v1/auth/register \
+curl -fsS http://localhost:8080/api/v1/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.com","password":"WalletPass123!"}' | jq
 
 # 2. Вход и сохранение токена.
-TOKEN=$(curl -fsS http://localhost:8084/api/v1/auth/login \
+TOKEN=$(curl -fsS http://localhost:8080/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.com","password":"WalletPass123!"}' \
   | jq -er '.accessToken')
 
-curl -fsS http://localhost:8084/api/v1/users/me \
+curl -fsS http://localhost:8080/api/v1/users/me \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # 3. Два кошелька текущего пользователя.
-WALLET_A=$(curl -fsS http://localhost:8081/api/v1/wallets \
+WALLET_A=$(curl -fsS http://localhost:8080/api/v1/wallets \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"currency":"RUB"}' | jq -er '.id')
 
-WALLET_B=$(curl -fsS http://localhost:8081/api/v1/wallets \
+WALLET_B=$(curl -fsS http://localhost:8080/api/v1/wallets \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"currency":"RUB"}' | jq -er '.id')
 
@@ -495,7 +497,7 @@ DEPOSIT_KEY="deposit-$(date +%s)-$RANDOM"
 DEPOSIT_BODY=$(jq -nc --arg target "$WALLET_A" \
   '{type:"DEPOSIT",amount:1000.00,currency:"RUB",targetWalletId:$target}')
 
-DEPOSIT=$(curl -fsS http://localhost:8082/api/v1/payments \
+DEPOSIT=$(curl -fsS http://localhost:8080/api/v1/payments \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $DEPOSIT_KEY" -d "$DEPOSIT_BODY")
 echo "$DEPOSIT" | jq
@@ -503,7 +505,7 @@ echo "$DEPOSIT" | jq -e '.status == "SUCCESS"' >/dev/null || exit 1
 PAYMENT_ID=$(echo "$DEPOSIT" | jq -er '.id')
 
 # 5. Повтор пополнения с тем же ключом: тот же id, баланс не растёт снова.
-curl -fsS http://localhost:8082/api/v1/payments \
+curl -fsS http://localhost:8080/api/v1/payments \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $DEPOSIT_KEY" -d "$DEPOSIT_BODY" | jq
 
@@ -512,22 +514,22 @@ TRANSFER_KEY="transfer-$(date +%s)-$RANDOM"
 TRANSFER_BODY=$(jq -nc --arg source "$WALLET_A" --arg target "$WALLET_B" \
   '{type:"TRANSFER",amount:250.00,currency:"RUB",sourceWalletId:$source,targetWalletId:$target}')
 
-TRANSFER=$(curl -fsS http://localhost:8082/api/v1/payments \
+TRANSFER=$(curl -fsS http://localhost:8080/api/v1/payments \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $TRANSFER_KEY" -d "$TRANSFER_BODY")
 echo "$TRANSFER" | jq
 echo "$TRANSFER" | jq -e '.status == "SUCCESS"' >/dev/null || exit 1
 
 # 7. Балансы и сохранённый платёж.
-curl -fsS "http://localhost:8081/api/v1/wallets/$WALLET_A" \
+curl -fsS "http://localhost:8080/api/v1/wallets/$WALLET_A" \
   -H "Authorization: Bearer $TOKEN" | jq
-curl -fsS "http://localhost:8081/api/v1/wallets/$WALLET_B" \
+curl -fsS "http://localhost:8080/api/v1/wallets/$WALLET_B" \
   -H "Authorization: Bearer $TOKEN" | jq
-curl -fsS "http://localhost:8082/api/v1/payments/$PAYMENT_ID" \
+curl -fsS "http://localhost:8080/api/v1/payments/$PAYMENT_ID" \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # 8. Выписка. Если событие ещё в обработке, повторите запрос чуть позже.
-curl -fsS "http://localhost:8083/api/v1/statement?walletId=$WALLET_A&limit=50" \
+curl -fsS "http://localhost:8080/api/v1/statement?walletId=$WALLET_A&limit=50" \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
@@ -540,18 +542,18 @@ $credentials = @{
 } | ConvertTo-Json
 
 # При уже существующем пользователе пропустите регистрацию.
-Invoke-RestMethod -Method Post -Uri 'http://localhost:8084/api/v1/auth/register' `
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/v1/auth/register' `
     -ContentType 'application/json' -Body $credentials
 
-$login = Invoke-RestMethod -Method Post -Uri 'http://localhost:8084/api/v1/auth/login' `
+$login = Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/v1/auth/login' `
     -ContentType 'application/json' -Body $credentials
 $authHeaders = @{ Authorization = "Bearer $($login.accessToken)" }
 
-Invoke-RestMethod -Uri 'http://localhost:8084/api/v1/users/me' -Headers $authHeaders
+Invoke-RestMethod -Uri 'http://localhost:8080/api/v1/users/me' -Headers $authHeaders
 
-$walletA = Invoke-RestMethod -Method Post -Uri 'http://localhost:8081/api/v1/wallets' `
+$walletA = Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/v1/wallets' `
     -Headers $authHeaders -ContentType 'application/json' -Body '{"currency":"RUB"}'
-$walletB = Invoke-RestMethod -Method Post -Uri 'http://localhost:8081/api/v1/wallets' `
+$walletB = Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/v1/wallets' `
     -Headers $authHeaders -ContentType 'application/json' -Body '{"currency":"RUB"}'
 
 $depositHeaders = @{
@@ -565,13 +567,13 @@ $depositBody = @{
     targetWalletId = $walletA.id
 } | ConvertTo-Json
 
-$deposit = Invoke-RestMethod -Method Post -Uri 'http://localhost:8082/api/v1/payments' `
+$deposit = Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/v1/payments' `
     -Headers $depositHeaders -ContentType 'application/json' -Body $depositBody
 $deposit
 if ($deposit.status -ne 'SUCCESS') { throw "Deposit failed: $($deposit.failureReason)" }
 
 # Тот же ключ и тело: возвращается тот же платёж без повторного пополнения.
-Invoke-RestMethod -Method Post -Uri 'http://localhost:8082/api/v1/payments' `
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/v1/payments' `
     -Headers $depositHeaders -ContentType 'application/json' -Body $depositBody
 
 $transferHeaders = @{
@@ -586,17 +588,17 @@ $transferBody = @{
     targetWalletId = $walletB.id
 } | ConvertTo-Json
 
-$transfer = Invoke-RestMethod -Method Post -Uri 'http://localhost:8082/api/v1/payments' `
+$transfer = Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/v1/payments' `
     -Headers $transferHeaders -ContentType 'application/json' -Body $transferBody
 $transfer
 if ($transfer.status -ne 'SUCCESS') { throw "Transfer failed: $($transfer.failureReason)" }
 
-Invoke-RestMethod -Uri "http://localhost:8081/api/v1/wallets/$($walletA.id)" -Headers $authHeaders
-Invoke-RestMethod -Uri "http://localhost:8081/api/v1/wallets/$($walletB.id)" -Headers $authHeaders
-Invoke-RestMethod -Uri "http://localhost:8082/api/v1/payments/$($deposit.id)" -Headers $authHeaders
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/wallets/$($walletA.id)" -Headers $authHeaders
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/wallets/$($walletB.id)" -Headers $authHeaders
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/payments/$($deposit.id)" -Headers $authHeaders
 
 # При необходимости повторите после обработки события в Kafka.
-Invoke-RestMethod -Uri "http://localhost:8083/api/v1/statement?walletId=$($walletA.id)&limit=50" `
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/statement?walletId=$($walletA.id)&limit=50" `
     -Headers $authHeaders
 ```
 
@@ -684,6 +686,7 @@ mvn -f user_service/pom.xml clean verify
 mvn -f ledger-service/pom.xml clean verify
 mvn -f payment-service/pom.xml clean verify
 mvn -f statement_service/pom.xml clean verify
+mvn -f gateway-service/pom.xml clean verify
 ```
 
 Либо в каталоге каждого сервиса используйте `./mvnw clean verify` на Bash и `.\mvnw.cmd clean verify` на Windows. Команда собирает JAR и запускает тесты.
@@ -731,21 +734,20 @@ docker exec miniwallet-postgres psql -U wallet -d miniwallet -c "SELECT count(*)
 
 - Реализован access token; refresh token, logout с отзывом токена, ротация ключей и немедленная инвалидизация JWT отсутствуют.
 - Нет API управления ролями и блокировками, подтверждения email и восстановления пароля.
-- `/internal/v1/operations` использует JWT клиента; отдельные service credentials и сетевое ограничение маршрута не настроены.
+- `/internal/v1/operations` использует JWT клиента; gateway не публикует этот маршрут. Отдельные service credentials пока не реализованы.
 - Модель рассчитана на RUB. API создания кошелька проверяет `RUB`, но полная проверка валюты операции и её совпадения с валютами кошельков ещё не реализована.
 - Денежные DTO проверяют положительность суммы; отдельные ограничения на максимум и количество дробных знаков пока не заданы. В примерах используются суммы с двумя знаками после запятой.
 - При успешном повторе ранее `FAILED`-платежа `failureReason` сейчас не очищается. Основной признак результата — `status`.
 - Outbox реализован через polling для текущей локальной схемы запуска. Координация нескольких publisher-инстансов, очистка outbox и отдельная DLQ ещё не настроены.
 - `limit` выписки не имеет заданного верхнего предела; страничной / курсорной пагинации нет.
 - Автоматизированные тесты проверяют загрузку контекста и фильтры выписки; полноценного покрытия финансовых сценариев нет.
-- Compose предназначен для локальной демонстрации: один PostgreSQL и один Kafka broker. Gateway и nginx будут добавлены следующим этапом.
+- Compose предназначен для локальной демонстрации: один PostgreSQL, один Kafka broker и один gateway. Вход настроен по HTTP на 127.0.0.1:8080.
 
 ## Дальнейшее развитие
 
 Объём финальной версии ограничен следующими этапами:
 
-- OpenAPI / Swagger UI для демонстрации HTTP API.
-- Spring Cloud Gateway и nginx как единый внешний вход.
+- OpenAPI / Swagger UI и единый вход nginx → Spring Cloud Gateway реализованы.
 - Возможный gRPC для существующего вызова payment → ledger с сохранением внешнего HTTP API и событий Kafka.
 - Итоговая проверка денежных сценариев и документация для портфолио.
 

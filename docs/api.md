@@ -1,176 +1,67 @@
-# Контракт API mini-wallet
+# HTTP API mini-wallet
 
-## Общие соглашения
+Основной адрес контейнерного окружения — `http://localhost:8080`. Запрос проходит nginx → Spring Cloud Gateway → сервис. JWT и права владельца проверяет целевой сервис.
 
-- Публичные ручки: `/api/v1/...`. Внутренние (сервис-сервис): `/internal/v1/...`
-- Публичные endpoint'ы ограничены rate limiter'ом (правило X-01).
-- Порты локально: ledger 8081, payment 8082, statement 8083
-- Все id — UUID
-- Время — ISO-8601 UTC, например `2026-08-14T10:30:00Z`
-- Суммы в JSON — строки с двумя знаками: `"100.00"`
-  Причина: числа с плавающей точкой в JSON могут терять точность у потребителей
-  строка сохраняет точное десятичное значение. Внутри Java — BigDecimal
-- Имена полей в JSON — camelCase, в БД — snake_case
-- Заголовок `Idempotency-Key` обязателен для `POST /api/v1/payments`
+## Интерактивная документация
 
-Формат ошибки — RFC 7807 (ProblemDetail) + поле `code`:
+[Swagger UI](http://localhost:8080/swagger-ui.html) содержит четыре контракта: User, Ledger, Payment, Statement.
 
-```json
-{
-  "type": "about:blank",
-  "title": "Unprocessable Content",
-  "status": 422,
-  "detail": "insufficient funds on wallet ...",
-  "code": "INSUFFICIENT_FUNDS"
-}
-```
+| Контракт | JSON |
+| --- | --- |
+| User | `/openapi/user` |
+| Ledger | `/openapi/ledger` |
+| Payment | `/openapi/payment` |
+| Statement | `/openapi/statement` |
 
-## ledger-service (8081)
+Каждый сервис формирует JSON через springdoc на своём `/v3/api-docs`. Gateway переписывает `/openapi/<service>` в этот путь. Общая UI размещена на gateway, в четырёх бизнес-сервисах подключена только генерация спецификации.
 
-### POST /api/v1/wallets — создать кошелек
+## Маршруты
 
-Request:
+| Метод | Путь | Сервис | Доступ / результат |
+| --- | --- | --- | --- |
+| POST | `/api/v1/auth/register` | user | Без JWT; 201 |
+| POST | `/api/v1/auth/login` | user | Без JWT; 200, accessToken |
+| GET | `/api/v1/users/me` | user | JWT; идентификатор и роль |
+| POST | `/api/v1/wallets` | ledger | JWT; 201, кошелёк с нулевым балансом |
+| GET | `/api/v1/wallets/{id}` | ledger | JWT; собственный кошелёк и баланс |
+| POST | `/api/v1/payments` | payment | JWT + Idempotency-Key; 201 новый / 200 повтор |
+| GET | `/api/v1/payments/{id}` | payment | JWT; собственный платёж |
+| GET | `/api/v1/statement?walletId=...` | statement | JWT; выписка владельца |
 
-```json
-{ "userId": "user-1", "currency": "RUB" }
-```
+Query-параметры выписки: `walletId` обязателен; `from` / `to` — необязательные ISO-8601 UTC instant, обе границы включительны; `limit` по умолчанию 50. Свежие записи возвращаются первыми.
 
-Response 201:
+## JWT и идемпотентность
 
-```json
-{
-  "id": "9f2c...", "userId": "user-1", "currency": "RUB",
-  "status": "ACTIVE", "balance": "0.00",
-  "createdAt": "2026-08-14T10:30:00Z"
-}
-```
+В Swagger UI выполните login, затем вставьте полученный `accessToken` в **Authorize** без слова `Bearer`. UI сформирует `Authorization: Bearer <token>` для защищённых операций. Регистрация и login остаются публичными. Swagger UI сохраняет JWT в локальном хранилище браузера для переключения контрактов; Remove authorization удаляет его.
 
-Ошибки: 400 VALIDATION_ERROR
+Для POST payments задайте уникальный `Idempotency-Key`, сохраните его вместе с исходным запросом и используйте тот же ключ при повторной отправке. Nginx и gateway передают этот заголовок и Authorization целевому сервису.
 
-### GET /api/v1/wallets/{walletId} — кошелек с балансом
-
-Response 200 — тот же DTO. Ошибки: 404 WALLET_NOT_FOUND
-
-### POST /internal/v1/operations — выполнить операцию (команда)
-
-Вызывается только payment-service
-
-Request:
+Пример пополнения (UUID нужно заменить на кошелёк текущего пользователя):
 
 ```json
-{
-  "idempotencyKey": "7d1e...",
-  "type": "TRANSFER",
-  "sourceWalletId": "9f2c...",
-  "targetWalletId": "4b8a...",
-  "amount": "100.00",
-  "currency": "RUB",
-  "externalRef": "payment-id"
-}
+{"type":"DEPOSIT","amount":"100.00","currency":"RUB","targetWalletId":"22222222-2222-4222-8222-222222222222"}
 ```
 
-Response 200 (выполнена или уже выполнена ранее):
+Для TRANSFER дополнительно передайте `sourceWalletId`; для DEPOSIT это поле нужно опустить. Примеры обоих запросов доступны в Swagger UI.
 
-```json
-{ "id": "tx-id", "status": "POSTED" }
+## Результаты и ошибки
+
+У платежа бизнес-результат находится в `status`: `SUCCESS`, `REJECTED` или `FAILED`. Например, недостаток средств возвращает созданный платёж со статусом `REJECTED` и `failureReason=INSUFFICIENT_FUNDS`, а не HTTP 422 от публичного payment API.
+
+HTTP-ошибки бизнес-сервисов описаны через `ProblemDetail` и дополнительное поле `code`. Например, отсутствие JWT даёт 401 / UNAUTHORIZED; чужой кошелёк или платёж — 404; конфликт ключа платежа — 409 / IDEMPOTENCY_KEY_CONFLICT. Чужая выписка возвращает пустой список. Поле code заполняют обработчики сервисов; стандартные ошибки Spring MVC (например, валидация DTO) могут возвращать ProblemDetail без code. Прокси передают ответ сервиса без замены его бизнес-кода.
+
+## Внутренний вызов ledger
+
+`POST /internal/v1/operations` вызывается payment напрямую по `http://ledger-service:8081` внутри Docker. Этот маршрут не включён в публичный OpenAPI и не настроен на gateway. Бизнес-сервисы и gateway не публикуют HTTP-порты на компьютере; внешним входом является nginx на 8080.
+
+## Локальная разработка
+
+Если приложения запущены из IDE, используйте gateway на `http://localhost:8085`. Адреса backend-сервисов задаются переменными `USER_SERVICE_URL`, `LEDGER_SERVICE_URL`, `PAYMENT_SERVICE_URL`, `STATEMENT_SERVICE_URL`; их значения по умолчанию указывают на localhost и порты 8084, 8081, 8082, 8083 соответственно.
+
+## Проверка маршрутизации
+
+Тесты gateway поднимают настоящий локальный HTTP backend и проверяют маршруты, query-параметры, передачу Authorization / Idempotency-Key, тела запросов и HTTP-статусов, переписывание путей документации и закрытость internal API. Они не требуют PostgreSQL или Kafka.
+
+```powershell
+.\gateway-service\mvnw.cmd -f gateway-service/pom.xml test
 ```
-
-Ошибки:
-- 400 VALIDATION_ERROR (сумма <= 0, source == target);
-- 404 WALLET_NOT_FOUND;
-- 409 IDEMPOTENCY_KEY_CONFLICT (тот же ключ, но другой payload);
-- 422 INSUFFICIENT_FUNDS / WALLET_BLOCKED.
-
-## payment-service (8082)
-
-### POST /api/v1/payments — создать платеж
-
-Заголовок: `Idempotency-Key: <uuid>` (обязателен).
-
-Request (перевод):
-
-```json
-{
-  "type": "TRANSFER",
-  "sourceWalletId": "9f2c...",
-  "targetWalletId": "4b8a...",
-  "amount": "100.00",
-  "currency": "RUB",
-  "description": "за обед"
-}
-```
-
-Request (пополнение): `sourceWalletId` отсутствует
-
-Response 201 (первое выполнение) / 200 (идемпотентный повтор):
-
-```json
-{
-  "id": "payment-id",
-  "type": "TRANSFER",
-  "sourceWalletId": "9f2c...",
-  "targetWalletId": "4b8a...",
-  "amount": "100.00",
-  "currency": "RUB",
-  "status": "SUCCESS",
-  "failureReason": null,
-  "createdAt": "...", "updatedAt": "..."
-}
-```
-
-Бизнес-отказ — это НЕ HTTP-ошибка: платеж создан, статус в теле
-Пример: 201 + `"status": "REJECTED", "failureReason": "INSUFFICIENT_FUNDS"`
-Причина: на HTTP-уровне запрос обработан; бизнес-результат — часть данных
-
-Ошибки:
-- 400 VALIDATION_ERROR;
-- 409 IDEMPOTENCY_KEY_CONFLICT;
-- 503 LEDGER_UNAVAILABLE (платеж сохранен со статусом FAILED, можно ретраить с тем же ключом)
-
-### GET /api/v1/payments/{paymentId} — статус платежа
-
-Response 200 — payment DTO. Ошибки: 404 PAYMENT_NOT_FOUND.
-
-## statement-service (8083)
-
-### GET /api/v1/wallets/{walletId}/statement — выписка
-
-Query-параметры: `from`, `to` (ISO-даты, опционально), `page` (default 0), `size` (default 20).
-
-Response 200:
-
-```json
-{
-  "items": [
-    {
-      "id": "...",
-      "transactionId": "...",
-      "direction": "OUT",
-      "amount": "-100.00",
-      "counterpartyWalletId": "4b8a...",
-      "description": "за обед",
-      "occurredAt": "2026-08-14T10:30:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalElements": 1
-}
-```
-
-Сортировка: `occurred_at DESC`.
-Если операций нет — 200 с пустым `items` (сервис не проверяет существование кошелька,
-он владеет только read model).
-
-## Таблица кодов ошибок
-
-| code                    | HTTP | где                         | смысл                           |
-|-------------------------|------|-----------------------------|---------------------------------|
-| VALIDATION_ERROR        | 400  | все                         | невалидный запрос               |
-| WALLET_NOT_FOUND        | 404  | ledger, payment             | кошелек не найден               |
-| PAYMENT_NOT_FOUND       | 404  | payment                     | платеж не найден                |
-| IDEMPOTENCY_KEY_CONFLICT| 409  | ledger, payment             | ключ использован с другим телом |
-| INSUFFICIENT_FUNDS      | 422  | ledger (в payment — в теле) | недостаточно средств            |
-| WALLET_BLOCKED          | 422  | ledger (в payment — в теле) | кошелек заблокирован            |
-| LEDGER_UNAVAILABLE      | 503  | payment                     | ledger недоступен, retry        |
-| RATE_LIMIT_EXCEEDED     | 429  | все публичные               | превышен лимит запросов         |

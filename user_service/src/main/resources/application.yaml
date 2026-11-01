@@ -31,3 +31,7 @@ app:
 
 server:
   port: 8084
+
+springdoc:
+  paths-to-match: /api/v1/**
+  override-with-generic-response: false

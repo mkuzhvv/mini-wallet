@@ -10,12 +10,14 @@
         <module name="statement_service" />
         <module name="user_service" />
         <module name="payment-service" />
+        <module name="gateway-service" />
         <module name="ledger-service" />
       </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="gateway-service" options="-parameters" />
       <module name="ledger-service" options="-parameters" />
       <module name="payment-service" options="-parameters" />
       <module name="statement_service" options="-parameters" />

@@ -9,12 +9,12 @@
 ```shell
 docker compose up --build -d --wait --wait-timeout 300
 docker compose ps -a
-docker compose logs -f ledger-service payment-service statement-service
+docker compose logs -f nginx gateway-service ledger-service payment-service statement-service
 ```
 
 Первая сборка скачивает базовые образы и Maven-зависимости. Повторная использует
-кэш. Приложения доступны на `localhost:8081`–`localhost:8084`.
-Проверка готовности: `GET /actuator/health` на каждом из этих портов.
+кэш. Внешний вход — `http://localhost:8080`, Swagger UI — `http://localhost:8080/swagger-ui.html`.
+Состояние всех контейнеров видно через `docker compose ps -a`; готовность gateway через nginx — `GET /actuator/health`.
 
 ```shell
 docker compose stop
@@ -30,7 +30,7 @@ docker compose down
 
 ## Что находится в Dockerfile
 
-В `dockerfiles/` лежат четыре отдельных Dockerfile и общая конфигурация Maven.
+В `dockerfiles/` лежат пять отдельных Dockerfile и общая конфигурация Maven.
 Контекст сборки — корень репозитория, поэтому пути в `COPY` начинаются с имени
 каталога сервиса, например `ledger-service/src`.
 
@@ -41,7 +41,7 @@ docker compose down
 
 В финальный образ не копируются Maven, исходники и кэш зависимостей.
 BuildKit хранит общий кэш Maven между сборками. Доступ к нему сериализован, чтобы
-четыре параллельные сборки не записывали одни и те же файлы одновременно.
+пять параллельных сборок не записывали одни и те же файлы одновременно.
 `.dockerignore` исключает локальные `target/`, `.git`, `.idea` и локальные настройки.
 
 Сборка использует `dockerfiles/maven-settings.xml` с HTTPS-зеркалом Maven Central
@@ -58,19 +58,37 @@ Compose создаёт сеть проекта `mini-wallet`. Контейнер
 | --- | --- | --- |
 | PostgreSQL | `postgres:5432` | `localhost:5432` |
 | Kafka | `kafka:9092` | `localhost:9092` |
-| Ledger | `ledger-service:8081` | `localhost:8081` |
-| Payment | `payment-service:8082` | `localhost:8082` |
-| Statement | `statement-service:8083` | `localhost:8083` |
-| User | `user-service:8084` | `localhost:8084` |
+| Ledger | `ledger-service:8081` | `localhost:8080/api/v1/wallets` |
+| Payment | `payment-service:8082` | `localhost:8080/api/v1/payments` |
+| Statement | `statement-service:8083` | `localhost:8080/api/v1/statement` |
+| User | `user-service:8084` | `localhost:8080/api/v1/auth/...` |
+| Gateway | `gateway-service:8085` | через nginx |
+| nginx | `nginx:80` | `localhost:8080` |
 
 Адреса PostgreSQL, Kafka и ledger переопределены через environment в Compose.
 Значения `localhost` в `application.yaml` остаются пригодны для запуска из IDE.
-Порты опубликованы только на `127.0.0.1`, для локального доступа.
+На `127.0.0.1` опубликованы nginx (8080), PostgreSQL (5432) и Kafka (9092).
 
 У Kafka два клиентских listener: `INTERNAL` для контейнеров и `EXTERNAL` для
 приложений на компьютере. Внешний порт `9092` перенаправляется на порт `19092`
 контейнера. В `advertised.listeners` брокер возвращает клиентам адрес,
 доступный с соответствующей стороны сети.
+
+## Внешний вход, gateway и Swagger UI
+
+Единственный опубликованный HTTP-порт — `127.0.0.1:8080`: он перенаправляется на порт 80 nginx. Порты Java-приложений не опубликованы на компьютере. Docker DNS позволяет контейнерам обращаться к ним напрямую.
+
+`dockerfiles/nginx.conf` подключается к готовому образу nginx как read-only файл. Nginx передаёт запрос gateway на `gateway-service:8085`, сохраняя путь, query-параметры, тело, Authorization и Idempotency-Key. Внешний Host передаётся вместе с портом; X-Forwarded-Host и X-Forwarded-Proto позволяют gateway формировать правильные ссылки Swagger UI за прокси.
+
+Gateway использует Spring Cloud Gateway Server Web MVC. Маршруты находятся в `gateway-service/src/main/resources/application.yaml`: `/api/v1/auth/**` и `/api/v1/users/**` идут в user, `/api/v1/wallets/**` — в ledger, `/api/v1/payments/**` — в payment, `/api/v1/statement` — в statement. `/internal/v1/operations` не имеет публичного маршрута; payment вызывает его напрямую внутри Docker.
+
+JWT продолжает проверять целевой бизнес-сервис. Gateway не выдаёт токены и не назначает владельца ресурса. В nginx задано ожидание ответа до 15 секунд, в HTTP-клиенте gateway — до 10 секунд.
+
+Общая [Swagger UI](http://localhost:8080/swagger-ui.html) работает на gateway. Четыре сервиса используют springdoc API-only и возвращают контракты на `/v3/api-docs`; gateway предоставляет их как `/openapi/user`, `/openapi/ledger`, `/openapi/payment`, `/openapi/statement`. Относительный OpenAPI server `/` направляет Try it out на текущий внешний адрес.
+
+Swagger UI сохраняет введённый Bearer JWT локально в браузере, чтобы он не терялся при переключении контрактов. **Authorize → Remove authorization** очищает сохранённую авторизацию. После истечения 15-минутного токена нужен новый login.
+
+nginx здесь работает по HTTP и передаёт трафик одному gateway. HTTPS и несколько экземпляров gateway в текущую конфигурацию не включены.
 
 ## Готовность и топик
 
@@ -80,7 +98,7 @@ PostgreSQL проверяется через `pg_isready`, Kafka — через 
 `kafka-init` ждёт готовности Kafka, создаёт `ledger-transactions` с тремя
 партициями и replication factor 1, затем завершается. `Exited (0)` для этого
 контейнера означает успешную инициализацию. Ledger и statement ждут её завершения,
-а payment дополнительно ждёт готовности ledger.
+а payment дополнительно ждёт готовности ledger. Gateway ждёт готовности четырёх бизнес-сервисов, nginx — gateway. При обновлении gateway через Compose nginx перезапускается благодаря `depends_on.restart: true`, заново разрешая его адрес.
 
 Команда создания использует `--if-not-exists`: повтор безопасен, топик не
 удаляется и не пересоздаётся. Эта команда не меняет параметры существующего
@@ -117,3 +135,9 @@ payment → ledger и цепочку outbox → Kafka → statement.
 ```
 
 Для разработки запускайте Maven с JDK 21. Полный контейнерный запуск этого не требует.
+
+Проверки gateway не требуют БД и Kafka и запускаются отдельно:
+
+```powershell
+.\gateway-service\mvnw.cmd -f gateway-service/pom.xml test
+```
